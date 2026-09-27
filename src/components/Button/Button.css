@@ -1,0 +1,44 @@
+.tt-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--tt-space-2);
+  border: 2px solid transparent;
+  border-radius: var(--tt-radius-pill);
+  font-family: var(--tt-font-sans);
+  font-weight: var(--tt-font-weight-bold);
+  line-height: 1;
+  cursor: pointer;
+  transition: background-color var(--tt-duration), border-color var(--tt-duration),
+    color var(--tt-duration), transform var(--tt-duration);
+}
+.tt-button:active:not(:disabled) { transform: translateY(1px); }
+.tt-button:focus-visible { outline: 3px solid var(--tt-color-focus); outline-offset: 2px; }
+.tt-button:disabled { cursor: not-allowed; opacity: 0.55; }
+.tt-button svg { width: 1.1em; height: 1.1em; flex: none; }
+
+.tt-button--sm { height: 32px; padding: 0 var(--tt-space-3); font-size: var(--tt-font-size-sm); }
+.tt-button--md { height: 40px; padding: 0 var(--tt-space-5); font-size: var(--tt-font-size-md); }
+.tt-button--lg { height: 52px; padding: 0 var(--tt-space-6); font-size: var(--tt-font-size-lg); }
+.tt-button--full { width: 100%; }
+
+.tt-button--primary { background: var(--tt-color-primary-600); color: var(--tt-color-neutral-0); box-shadow: var(--tt-shadow-sm); }
+.tt-button--primary:hover:not(:disabled) { background: var(--tt-color-primary-700); }
+.tt-button--secondary { background: var(--tt-color-secondary-50); color: var(--tt-color-secondary-600); }
+.tt-button--secondary:hover:not(:disabled) { background: var(--tt-color-secondary-100); }
+.tt-button--outline { background: var(--tt-color-surface); border-color: var(--tt-color-neutral-300); color: var(--tt-color-text); }
+.tt-button--outline:hover:not(:disabled) { border-color: var(--tt-color-primary-500); color: var(--tt-color-primary-600); }
+.tt-button--ghost { background: transparent; color: var(--tt-color-text); }
+.tt-button--ghost:hover:not(:disabled) { background: var(--tt-color-neutral-100); }
+.tt-button--danger { background: var(--tt-color-danger-600); color: var(--tt-color-neutral-0); }
+.tt-button--danger:hover:not(:disabled) { background: #991b1b; }
+
+.tt-button__spinner {
+  width: 1em;
+  height: 1em;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: tt-spin 0.7s linear infinite;
+}
+@keyframes tt-spin { to { transform: rotate(360deg); } }

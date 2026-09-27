@@ -1,0 +1,74 @@
+/* Design tokens. Every component reads these; override them on :root to rebrand. */
+:root {
+  /* Primary: warm coral */
+  --tt-color-primary-50: #fff1ec;
+  --tt-color-primary-100: #ffdccf;
+  --tt-color-primary-200: #ffb89f;
+  --tt-color-primary-300: #ff936f;
+  --tt-color-primary-500: #f2602f;
+  --tt-color-primary-600: #c4410f;
+  --tt-color-primary-700: #a2360c;
+
+  /* Secondary: friendly violet */
+  --tt-color-secondary-50: #f1eefc;
+  --tt-color-secondary-100: #e0dafa;
+  --tt-color-secondary-500: #6d5bd0;
+  --tt-color-secondary-600: #5b48c2;
+
+  /* Status */
+  --tt-color-success-50: #e8f7ef;
+  --tt-color-success-600: #157347;
+  --tt-color-warning-50: #fff6e0;
+  --tt-color-warning-600: #b45309;
+  --tt-color-danger-50: #fdecec;
+  --tt-color-danger-600: #b91c1c;
+  --tt-color-info-50: #eaf1fe;
+  --tt-color-info-600: #1d4ed8;
+
+  /* Neutrals (warm) */
+  --tt-color-neutral-0: #ffffff;
+  --tt-color-neutral-50: #fffbf7;
+  --tt-color-neutral-100: #f6f1ec;
+  --tt-color-neutral-200: #e9e2da;
+  --tt-color-neutral-300: #d6cdc4;
+  --tt-color-neutral-500: #8a8497;
+  --tt-color-neutral-600: #6b6478;
+  --tt-color-neutral-900: #2b2433;
+
+  /* Semantic aliases */
+  --tt-color-bg: var(--tt-color-neutral-50);
+  --tt-color-surface: var(--tt-color-neutral-0);
+  --tt-color-text: var(--tt-color-neutral-900);
+  --tt-color-text-muted: var(--tt-color-neutral-600);
+  --tt-color-border: var(--tt-color-neutral-200);
+  --tt-color-focus: var(--tt-color-secondary-500);
+
+  /* Typography */
+  --tt-font-sans: 'Nunito Variable', 'Nunito', ui-rounded, system-ui, sans-serif;
+  --tt-font-size-xs: 0.75rem;
+  --tt-font-size-sm: 0.875rem;
+  --tt-font-size-md: 1rem;
+  --tt-font-size-lg: 1.125rem;
+  --tt-font-size-xl: 1.375rem;
+  --tt-font-weight-regular: 500;
+  --tt-font-weight-bold: 750;
+
+  /* Spacing (4px scale) */
+  --tt-space-1: 0.25rem;
+  --tt-space-2: 0.5rem;
+  --tt-space-3: 0.75rem;
+  --tt-space-4: 1rem;
+  --tt-space-5: 1.25rem;
+  --tt-space-6: 1.5rem;
+  --tt-space-8: 2rem;
+
+  /* Shape and depth */
+  --tt-radius-sm: 8px;
+  --tt-radius-md: 12px;
+  --tt-radius-lg: 20px;
+  --tt-radius-pill: 999px;
+  --tt-shadow-sm: 0 1px 2px rgb(43 36 51 / 0.06), 0 1px 3px rgb(43 36 51 / 0.08);
+  --tt-shadow-md: 0 4px 12px rgb(43 36 51 / 0.08), 0 2px 4px rgb(43 36 51 / 0.05);
+  --tt-shadow-lg: 0 16px 40px rgb(43 36 51 / 0.16);
+  --tt-duration: 160ms;
+}

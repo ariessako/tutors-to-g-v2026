@@ -1,0 +1,26 @@
+.tt-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border-radius: var(--tt-radius-pill);
+  font-family: var(--tt-font-sans);
+  font-weight: var(--tt-font-weight-bold);
+  line-height: 1;
+  white-space: nowrap;
+  color: var(--tt-badge-fg);
+  background: var(--tt-badge-bg);
+}
+.tt-badge--sm { padding: 3px 8px; font-size: var(--tt-font-size-xs); }
+.tt-badge--md { padding: 5px 10px; font-size: var(--tt-font-size-sm); }
+.tt-badge__dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+
+.tt-badge--neutral { --tt-tone: var(--tt-color-neutral-600); --tt-tone-soft: var(--tt-color-neutral-100); }
+.tt-badge--primary { --tt-tone: var(--tt-color-primary-600); --tt-tone-soft: var(--tt-color-primary-50); }
+.tt-badge--secondary { --tt-tone: var(--tt-color-secondary-600); --tt-tone-soft: var(--tt-color-secondary-50); }
+.tt-badge--success { --tt-tone: var(--tt-color-success-600); --tt-tone-soft: var(--tt-color-success-50); }
+.tt-badge--warning { --tt-tone: var(--tt-color-warning-600); --tt-tone-soft: var(--tt-color-warning-50); }
+.tt-badge--danger { --tt-tone: var(--tt-color-danger-600); --tt-tone-soft: var(--tt-color-danger-50); }
+.tt-badge--info { --tt-tone: var(--tt-color-info-600); --tt-tone-soft: var(--tt-color-info-50); }
+
+.tt-badge--soft { --tt-badge-fg: var(--tt-tone); --tt-badge-bg: var(--tt-tone-soft); }
+.tt-badge--solid { --tt-badge-fg: var(--tt-color-neutral-0); --tt-badge-bg: var(--tt-tone); }
