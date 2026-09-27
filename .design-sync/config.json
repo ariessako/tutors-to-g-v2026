@@ -1,0 +1,30 @@
+{
+  "projectId": "a848077b-e43f-413d-984c-e5252db89403",
+  "shape": "storybook",
+  "storybookConfigDir": ".storybook",
+  "storybookStatic": ".design-sync/sb-reference",
+  "pkg": "tutors-ui",
+  "globalName": "TutorsUI",
+  "entry": "dist/index.js",
+  "buildCmd": "npm run build",
+  "cssEntry": "dist/styles.css",
+  "extraFonts": [
+    "dist/fonts/fonts.css"
+  ],
+  "overrides": {
+    "Alert": {
+      "cardMode": "column"
+    },
+    "Card": {
+      "cardMode": "column"
+    },
+    "Tabs": {
+      "cardMode": "column"
+    },
+    "Modal": {
+      "cardMode": "single",
+      "primaryStory": "Open"
+    }
+  },
+  "readmeHeader": ".design-sync/conventions.md"
+}
