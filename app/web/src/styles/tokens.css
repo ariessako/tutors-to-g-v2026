@@ -1,0 +1,106 @@
+/* Design tokens from the Tutors To Go v2 design. Light on :root, dark under [data-theme="dark"]. */
+:root {
+  --font-body: 'Instrument Sans', system-ui, -apple-system, sans-serif;
+  --font-head: 'Newsreader Variable', 'Newsreader', Georgia, serif;
+  --color-bg: #f4f6f8;
+  --color-surface: #fff;
+  --color-surface-2: #f0f3f6;
+  --color-border: #e1e6eb;
+  --color-text: #121820;
+  --color-muted: #5b6572;
+  --color-accent: #0e7490;
+  --color-accent-600: #0b627a;
+  --color-accent-700: #0a5266;
+  --color-accent-100: #e4f3f7;
+  --color-accent-200: #bfe3ec;
+  --on-accent: #fff;
+  --color-neutral-200: #e6eaee;
+  --color-neutral-400: #b2bac4;
+  --color-neutral-500: #8e97a3;
+  --color-neutral-700: #4b5561;
+  --color-neutral-800: #2e3640;
+  --t-info-bg: #e4f3f7;
+  --t-info-fg: #0a5266;
+  --t-ok-bg: #e6f4ea;
+  --t-ok-fg: #166534;
+  --t-warn-bg: #fdf1e1;
+  --t-warn-fg: #92400e;
+  --t-bad-bg: #fdecef;
+  --t-bad-fg: #9f1239;
+  --t-neutral-bg: #eef1f4;
+  --t-neutral-fg: #46505c;
+  --cl-1: #0e7490;
+  --cl-2: #c2410c;
+  --cl-3: #7c3aed;
+  --cl-4: #4d7c0f;
+  --cl-5: #be185d;
+  --cl-6: #a16207;
+  --cl-7: #1d4ed8;
+  --cl-8: #475569;
+  --shadow-sm: 0 1px 2px rgba(16, 24, 40, 0.04), 0 1px 3px rgba(16, 24, 40, 0.07);
+  --shadow-md: 0 10px 24px -8px rgba(16, 24, 40, 0.14), 0 2px 6px -2px rgba(16, 24, 40, 0.06);
+  --shadow-lg: 0 24px 56px -12px rgba(16, 24, 40, 0.3);
+  --backdrop: rgba(16, 24, 40, 0.45);
+  color-scheme: light;
+}
+
+[data-theme='dark'] {
+  --color-bg: #0b0f14;
+  --color-surface: #131920;
+  --color-surface-2: #1a212a;
+  --color-border: #252e39;
+  --color-text: #e6eaef;
+  --color-muted: #98a2ae;
+  --color-accent: #29a5c4;
+  --color-accent-600: #43b6d3;
+  --color-accent-700: #86d3e6;
+  --color-accent-100: #10303a;
+  --color-accent-200: #1a4b58;
+  --on-accent: #04202a;
+  --color-neutral-200: #222a34;
+  --color-neutral-400: #4a5461;
+  --color-neutral-500: #6a7482;
+  --color-neutral-700: #b3bbc6;
+  --color-neutral-800: #d6dce3;
+  --t-info-bg: #10303a;
+  --t-info-fg: #86d3e6;
+  --t-ok-bg: #12291b;
+  --t-ok-fg: #86efac;
+  --t-warn-bg: #2d2310;
+  --t-warn-fg: #fcd34d;
+  --t-bad-bg: #2e141b;
+  --t-bad-fg: #fda4af;
+  --t-neutral-bg: #1f2630;
+  --t-neutral-fg: #b3bbc6;
+  --cl-1: #29a5c4;
+  --cl-2: #f07a45;
+  --cl-3: #a78bfa;
+  --cl-4: #84cc16;
+  --cl-5: #f472b6;
+  --cl-6: #eab308;
+  --cl-7: #60a5fa;
+  --cl-8: #94a3b8;
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.45);
+  --shadow-md: 0 12px 28px -10px rgba(0, 0, 0, 0.7);
+  --shadow-lg: 0 24px 60px -12px rgba(0, 0, 0, 0.8);
+  --backdrop: rgba(0, 0, 0, 0.6);
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-body);
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+h1, h2, h3, h4, h5 { font-family: var(--font-head); font-weight: 600; margin: 0; letter-spacing: -0.01em; line-height: 1.15; }
+p { margin: 0; }
+a { color: var(--color-accent); text-underline-offset: 3px; }
+a:hover { color: var(--color-accent-600); }
+button, input, select, textarea { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+::selection { background: var(--color-accent-200); }

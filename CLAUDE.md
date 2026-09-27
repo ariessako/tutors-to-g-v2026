@@ -4,6 +4,30 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
+The repo holds two independent npm projects:
+
+- **`app/`: the Tutors To Go web app** (Express + SQLite API and React client), built from the "Tutors To Go v2" Claude Design project. It has its own `package.json`, `node_modules` and `README.md`; run its commands from `app/`. See "The app" below.
+- **The repo root: `tutors-ui`**, a component library described in the rest of this file. The app does not use it (it follows the design's own teal look).
+
+## The app (`app/`)
+
+```sh
+npm run dev        # API :3001 + Vite :5173 (proxies /api)
+npm test           # Vitest: tests/matching.test.ts, tests/api.test.ts (in-memory DB, seeded demo data)
+npm run typecheck
+npm run build && npm start
+npm run seed       # reset data/ttg.db to demo data; demo passwords are demo123
+npx vitest run tests/api.test.ts -t "booking"   # a single test
+```
+
+- `shared/matching.ts` is the one matching engine. The server uses it for live matches and the K-means lab page reruns it in the browser, so change it in one place and both follow. Clustering results are cached server-side and the cache is cleared after every successful non-GET request (`server/app.ts`).
+- Server routes live in `server/routes/*.ts`; each calls `requireUser(req, ...roles)` and checks ownership. `server/views.ts` shapes rows for the client; anonymous review authors are stripped there unless the viewer is an admin. Keep that when adding endpoints that return reviews.
+- Schema changes: edit `server/db/schema.ts`, then `npm run db:generate`; migrations apply at server start.
+- Web: screens in `web/src/screens/`, grouped by role. `useAction()` in `web/src/api.ts` runs a write and invalidates every query afterwards. Login and logout do a full page load (`window.location.assign`) so no cached data crosses accounts; post-login toasts go through `flash()`.
+- Styling reproduces the design's inline styles as classes in `web/src/styles/app.css`; tokens (light and `[data-theme="dark"]`) are in `tokens.css`, copied from the design.
+
+## The component library (repo root)
+
 `tutors-ui`: a small React + TypeScript component library for a tutoring app, styled as "friendly & bright" (warm coral primary, violet secondary, rounded Nunito font). It has 8 components: Button, Input, Card, Badge, Avatar, Alert, Tabs and Modal. It is synced to Claude Design (claude.ai/design) with the `/design-sync` skill, so the design agent builds with these real components.
 
 ## Commands
