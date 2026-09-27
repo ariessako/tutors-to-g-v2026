@@ -1,5 +1,7 @@
 .tt-badge {
   display: inline-flex;
+  /* Keep the badge hugging its label inside flex columns, which would otherwise stretch it. */
+  width: fit-content;
   align-items: center;
   gap: 6px;
   border-radius: var(--tt-radius-pill);

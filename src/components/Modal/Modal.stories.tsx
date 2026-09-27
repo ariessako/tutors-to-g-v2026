@@ -1,8 +1,26 @@
 import { useState } from 'react';
-import type { Meta, StoryObj } from '@storybook/react-vite';
+import type { Decorator, Meta, StoryObj } from '@storybook/react-vite';
 import { Modal } from './Modal';
 import { Button } from '../Button/Button';
+import { Card } from '../Card/Card';
 import { Input } from '../Input/Input';
+
+// The modal portals to document.body, so open-state stories render a full-height
+// page behind it. That shows the overlay in context and gives the story root real
+// content (screenshot tools that read #storybook-root see the page, not nothing).
+const withPage: Decorator = (Story) => (
+  <div style={{ minHeight: '100vh', padding: 32, background: 'var(--tt-color-bg)', boxSizing: 'border-box' }}>
+    <div style={{ display: 'grid', gap: 16, maxWidth: 520 }}>
+      <Card title="Algebra I · Session 4" subtitle="Thursday, 4:00 – 5:00 PM">
+        Factoring quadratics and solving by completing the square.
+      </Card>
+      <Card title="Chemistry · Session 2" subtitle="Friday, 3:00 – 4:00 PM">
+        Balancing chemical equations.
+      </Card>
+    </div>
+    <Story />
+  </div>
+);
 
 const meta = {
   title: 'Components/Modal',
@@ -26,9 +44,10 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-export const Open: Story = {};
+export const Open: Story = { decorators: [withPage] };
 
 export const WithForm: Story = {
+  decorators: [withPage],
   args: {
     title: 'Invite a student',
     description: 'They’ll get an email with a link to join your class.',

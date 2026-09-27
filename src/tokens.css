@@ -44,7 +44,7 @@
   --tt-color-focus: var(--tt-color-secondary-500);
 
   /* Typography */
-  --tt-font-sans: 'Nunito Variable', 'Nunito', ui-rounded, system-ui, sans-serif;
+  --tt-font-sans: 'Nunito Variable', ui-rounded, system-ui, sans-serif;
   --tt-font-size-xs: 0.75rem;
   --tt-font-size-sm: 0.875rem;
   --tt-font-size-md: 1rem;
