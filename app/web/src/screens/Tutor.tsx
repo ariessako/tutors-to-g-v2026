@@ -280,6 +280,8 @@ export function TutorSchedule({ me }: { me: Me }) {
 export function TutorSessions() {
   const q = useApi<{ sessions: SessionView[] }>('/sessions');
   const [confirm, setConfirm] = useState<ConfirmSpec | null>(null);
+  const [acceptingId, setAcceptingId] = useState<string | null>(null);
+  const acceptance = useAction();
   const { run, error } = useAction();
   const toast = useToast();
   if (!q.data) return q.error ? <ErrorBox error={q.error.message} /> : <Loading />;
@@ -289,7 +291,9 @@ export function TutorSessions() {
   const done = all.filter((x) => x.status === 'completed').reverse();
 
   const accept = async (x: SessionView) => {
-    if (await run(() => api(`/sessions/${x.id}/respond`, { body: { accept: true } }))) toast(`Accepted. ${x.student.split(' ')[0]} can now pay through PayPal.`);
+    if (acceptance.busy) return;
+    setAcceptingId(x.id);
+    if (await acceptance.run(() => api(`/sessions/${x.id}/respond`, { body: { accept: true } }))) toast(`Accepted. ${x.student.split(' ')[0]} can now pay through PayPal.`);
   };
   const decline = (x: SessionView) =>
     setConfirm({
@@ -326,9 +330,12 @@ export function TutorSessions() {
               </div>
               <div style={{ padding: '10px 12px', borderRadius: 9, background: 'var(--color-surface-2)', fontSize: 14 }}>“{r.topic}”</div>
               {r.guardian && <div className="muted row" style={{ fontSize: 12, gap: 6 }}><Icon name="phone" />Guardian: {r.guardian}</div>}
+              {acceptingId === r.id && acceptance.error && (
+                <div role="alert"><ErrorBox error={acceptance.error} /></div>
+              )}
               <div className="row" style={{ gap: 8 }}>
-                <button className="btn btn-primary" style={{ flex: 1, height: 36 }} onClick={() => accept(r)}><Icon name="check" />Accept</button>
-                <button className="btn btn-secondary" style={{ height: 36 }} onClick={() => decline(r)}>Decline</button>
+                <button className="btn btn-primary" style={{ flex: 1, height: 36 }} disabled={acceptance.busy} aria-busy={acceptingId === r.id && acceptance.busy} onClick={() => accept(r)}><Icon name="check" />{acceptingId === r.id && acceptance.busy ? 'Checking…' : 'Accept'}</button>
+                <button className="btn btn-secondary" style={{ height: 36 }} disabled={acceptance.busy} onClick={() => decline(r)}>Decline</button>
               </div>
             </article>
           ))}

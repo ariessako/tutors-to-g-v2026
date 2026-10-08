@@ -98,9 +98,9 @@ describe('booking and payment flow', () => {
     const slot = booking.body.slots[0];
     const req = await bea.post('/api/sessions').send({ tutorId: 't_paolo', subject: 'Math', date: slot.date, slot: slot.slot, hours: 1, mode: 'In-person', topic: 'Trigonometry basics' });
     expect(req.status).toBe(201);
-    // The same slot can't be booked twice.
+    // Students can request the same slot; the instructor can only confirm one.
     const dup = await bea.post('/api/sessions').send({ tutorId: 't_paolo', subject: 'Math', date: slot.date, slot: slot.slot, hours: 1, mode: 'In-person', topic: 'Trigonometry basics' });
-    expect(dup.status).toBe(409);
+    expect(dup.status).toBe(201);
 
     // Paying before the tutor accepts is refused.
     const early = await bea.post(`/api/sessions/${req.body.id}/receipt`).field('txn', 'ABCDEFGH12').field('amount', '450').attach('receipt', PDF, { filename: 'r.pdf', contentType: 'application/pdf' });
@@ -108,9 +108,19 @@ describe('booking and payment flow', () => {
 
     const paolo = await as('paolo.reyes@tutor.ph');
     expect((await paolo.post(`/api/sessions/${req.body.id}/respond`).send({ accept: true })).status).toBe(200);
+    expect((await paolo.post(`/api/sessions/${dup.body.id}/respond`).send({ accept: true })).status).toBe(409);
 
     const pay = await bea.post(`/api/sessions/${req.body.id}/receipt`).field('txn', 'ABCDEFGH12').field('amount', '450').attach('receipt', PDF, { filename: 'receipt.pdf', contentType: 'application/pdf' });
     expect(pay.status).toBe(200);
+
+    const studentPending = await bea.get('/api/sessions');
+    const pending = studentPending.body.sessions.find((s: { id: string }) => s.id === req.body.id);
+    expect(pending.payment.status).toBe('for_review');
+    const tutorPending = await paolo.get('/api/sessions');
+    expect(tutorPending.body.sessions.find((s: { id: string }) => s.id === req.body.id).payment.status).toBe('for_review');
+    const duplicateReceipt = await bea.post(`/api/sessions/${req.body.id}/receipt`).field('txn', 'ABCDEFGH12').field('amount', '450').attach('receipt', PDF, { filename: 'duplicate.pdf', contentType: 'application/pdf' });
+    expect(duplicateReceipt.status).toBe(409);
+    expect((await bea.post(`/api/admin/payments/${req.body.id}`).send({ approve: true })).status).toBe(403);
 
     const admin = await as('admin@tutorstogo.ph');
     const pays = await admin.get('/api/admin/payments');
@@ -120,9 +130,25 @@ describe('booking and payment flow', () => {
     expect((await bea.get(`/api/files/${row.receiptFileId}`)).status).toBe(200);
     expect((await paolo.get(`/api/files/${row.receiptFileId}`)).status).toBe(404);
 
+    expect((await admin.post(`/api/admin/payments/${req.body.id}`).send({ approve: false })).status).toBe(200);
+    const rejected = await bea.get('/api/sessions');
+    expect(rejected.body.sessions.find((s: { id: string }) => s.id === req.body.id).payment.status).toBe('rejected');
+    const resubmit = await bea.post(`/api/sessions/${req.body.id}/receipt`).field('txn', 'CORRECTED123').field('amount', '450').attach('receipt', PDF, { filename: 'corrected.pdf', contentType: 'application/pdf' });
+    expect(resubmit.status).toBe(200);
+    const updatedPays = await admin.get('/api/admin/payments');
+    const updatedRow = updatedPays.body.payments.find((p: { id: string }) => p.id === req.body.id);
+    expect(updatedRow.status).toBe('for_review');
+    expect(updatedRow.txn).toBe('CORRECTED123');
+    expect(updatedRow.receiptName).toBe('corrected.pdf');
+    expect(updatedRow.receiptFileId).not.toBe(row.receiptFileId);
+    expect((await admin.get(`/api/files/${updatedRow.receiptFileId}`)).status).toBe(200);
+
     expect((await admin.post(`/api/admin/payments/${req.body.id}`).send({ approve: true })).status).toBe(200);
     const mine = await paolo.get('/api/sessions');
     expect(mine.body.sessions.find((s: { id: string }) => s.id === req.body.id).payment.status).toBe('paid');
+    const studentPaid = await bea.get('/api/sessions');
+    expect(studentPaid.body.sessions.find((s: { id: string }) => s.id === req.body.id).payment.status).toBe('paid');
+    expect((await admin.post(`/api/admin/payments/${req.body.id}`).send({ approve: true })).status).toBe(409);
   });
 
   it('rejects non-PDF, non-image uploads', async () => {
