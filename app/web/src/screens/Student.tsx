@@ -87,7 +87,7 @@ export function StudentHome({ me }: { me: Me }) {
             {h.cluster && <Tag tone="accent" icon="circles-three-plus">Cluster {h.cluster.no}</Tag>}
             <Link to="/profile" className="link">Edit profile</Link>
           </div>
-          <h3 style={{ fontSize: 22 }}>{h.cluster?.name ?? 'Complete your profile'}</h3>
+          <h3 style={{ fontSize: 22 }}>{h.cluster?.name ?? (me.profile ? 'No tutors available yet' : 'Complete your profile')}</h3>
           {h.cluster && (
             <p className="muted">You share this cluster with <strong style={{ color: 'var(--color-text)' }}>{h.cluster.count} tutors</strong>.</p>
           )}
@@ -161,6 +161,7 @@ export function Matches() {
   const [modal, setModal] = useState<StudentModal | null>(null);
   if (!q.data) return q.error ? <ErrorBox error={q.error.message} /> : <Loading />;
   const M = q.data.matches;
+  if (!M && q.data.reason === 'no_tutors') return <div className="empty">No tutors are available yet. Check back after a tutor is approved.</div>;
   if (!M) return <div className="empty">Complete your matching profile to see tutors. <Link to="/profile">Open your profile</Link></div>;
   const subjects = ['All', ...SUBJECTS.filter((s) => M.inCluster.some((m) => m.subjects.includes(s)))];
   const cur = subjects.includes(subj) ? subj : 'All';
@@ -466,4 +467,3 @@ export function StudentSessions() {
     </section>
   );
 }
-

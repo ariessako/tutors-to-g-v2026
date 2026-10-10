@@ -95,7 +95,9 @@ describe('booking and payment flow', () => {
   it('goes from request to paid, with the receipt visible only to its owner and admins', async () => {
     const bea = await as('bea@student.ph');
     const booking = await bea.get('/api/tutors/t_paolo/booking');
-    const slot = booking.body.slots[0];
+    // The first slot varies by weekday and can already be reserved by the seed.
+    const slot = booking.body.slots.find((s: { slot: string }) => s.slot === 'Mon 18:00');
+    expect(slot).toBeDefined();
     const req = await bea.post('/api/sessions').send({ tutorId: 't_paolo', subject: 'Math', date: slot.date, slot: slot.slot, hours: 1, mode: 'In-person', topic: 'Trigonometry basics' });
     expect(req.status).toBe(201);
     // Students can request the same slot; the instructor can only confirm one.

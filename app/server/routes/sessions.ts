@@ -113,7 +113,7 @@ export function sessionRoutes(ctx: Ctx) {
   r.get('/matches', (req, res) => {
     const me = requireUser(req, 'student');
     const m = svc.matches(me.id);
-    if (!m) return void res.json({ matches: null });
+    if (!m) return void res.json({ matches: null, reason: svc.pool().some((p) => p.role === 'teacher') ? 'profile_required' : 'no_tutors' });
     res.json({
       matches: {
         cluster: { no: m.cluster + 1, name: m.info.name, count: m.inCluster.length },
@@ -290,25 +290,31 @@ export function sessionRoutes(ctx: Ctx) {
       .parse(req.body);
     const learnerId = me.role === 'student' ? me.id : me.childId;
     if (!learnerId) throw new HttpError(403, 'Link your account to your child first.');
-    const theirs = db
-      .select()
-      .from(tutoringSessions)
-      .where(and(eq(tutoringSessions.studentId, learnerId), eq(tutoringSessions.tutorId, d.tutorId)))
-      .all();
-    let session = null;
-    if (d.sessionId) {
-      session = theirs.find((x) => x.id === d.sessionId);
-      if (!session || session.status !== 'completed') throw new HttpError(400, 'You can rate a session once it’s completed.');
-      if (session.rated) throw new HttpError(409, 'You already rated this session.');
-    } else if (me.role === 'student' ? !theirs.some((x) => x.status === 'completed') : !theirs.some((x) => x.status !== 'declined')) {
-      throw new HttpError(403, 'You can only review tutors you’ve had sessions with.');
-    }
+    // Lock before reading review history so concurrent submissions share the same limit.
     db.transaction((tx) => {
+      const theirs = tx
+        .select()
+        .from(tutoringSessions)
+        .where(and(eq(tutoringSessions.studentId, learnerId), eq(tutoringSessions.tutorId, d.tutorId)))
+        .all();
+      if (me.role === 'student' && !d.sessionId) throw new HttpError(400, 'Choose a completed session to review.');
+      let session = null;
+      if (d.sessionId) {
+        session = theirs.find((x) => x.id === d.sessionId);
+        if (!session || session.status !== 'completed') throw new HttpError(400, 'You can rate a session once it’s completed.');
+        if (me.role === 'student' && session.rated) throw new HttpError(409, 'You already rated this session.');
+      }
+      if (!theirs.some((x) => x.status === 'completed')) throw new HttpError(403, 'You can review this tutor after a completed session.');
+      const previous = tx.select({ id: reviews.id }).from(reviews).where(and(
+        eq(reviews.authorId, me.id), eq(reviews.tutorId, d.tutorId),
+        me.role === 'student' ? eq(reviews.sessionId, d.sessionId!) : undefined,
+      )).get();
+      if (previous) throw new HttpError(409, me.role === 'parent' ? 'You already reviewed this tutor.' : 'You already rated this session.');
       tx.insert(reviews)
         .values({ id: uid('r_'), tutorId: d.tutorId, authorId: me.id, authorRole: me.role as 'student' | 'parent', rating: d.rating, comment: d.comment, anonymous: d.anonymous, date: iso(new Date()), status: 'new', sessionId: session?.id ?? null })
         .run();
-      if (session) tx.update(tutoringSessions).set({ rated: d.rating }).where(eq(tutoringSessions.id, session.id)).run();
-    });
+      if (session && me.role === 'student') tx.update(tutoringSessions).set({ rated: d.rating }).where(eq(tutoringSessions.id, session.id)).run();
+    }, { behavior: 'immediate' });
     res.status(201).json({ ok: true });
   });
 

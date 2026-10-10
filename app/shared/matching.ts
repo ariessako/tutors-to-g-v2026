@@ -143,6 +143,7 @@ export interface KMeansResult {
 export function kmeans(X: Vec[], kIn: number, opt: { seed?: number; init?: Settings['init'] } = {}): KMeansResult {
   const r = rng(opt.seed || 7);
   const n = X.length;
+  if (!n) return { hist: [], centroids: [], assign: [], wcss: 0, iterations: 0 };
   const d = X[0].length;
   const k = Math.max(1, Math.min(kIn, n));
   const init = initCentroids(X, k, r, opt.init || 'kmeans++');
@@ -184,6 +185,7 @@ export interface Pca {
 /** Two principal components by power iteration, for drawing the clusters in 2D. */
 export function pca2(X: Vec[]): Pca {
   const n = X.length;
+  if (!n) return { project: () => [0, 0], explained: [0, 0], load1: { pos: [], neg: [] }, load2: { pos: [], neg: [] } };
   const d = X[0].length;
   const mu = new Array(d).fill(0);
   X.forEach((x) => x.forEach((v, i) => (mu[i] += v / n)));
@@ -325,7 +327,7 @@ export function cluster(input: PersonInput[], settings: Settings): ClusterResult
   );
   const assignOf: Record<string, number> = {};
   people.forEach((p) => {
-    assignOf[p.id] = p.ci >= 0 ? km.assign[p.ci] : argmin(km.centroids.map((c) => dist(p.vec, c)));
+    assignOf[p.id] = !km.centroids.length ? -1 : p.ci >= 0 ? km.assign[p.ci] : argmin(km.centroids.map((c) => dist(p.vec, c)));
   });
   const pca = pca2(people.map((p) => p.vec));
   const raw = people.map((p) => pca.project(p.vec));
@@ -421,7 +423,7 @@ export interface MatchResult {
 /** Tutors ranked by distance to a student, split into their cluster and the rest. */
 export function matchesFor(cl: ClusterResult, studentId: string): MatchResult | null {
   const me = cl.people.find((p) => p.id === studentId);
-  if (!me) return null;
+  if (!me || !cl.nT || !cl.clusters.length) return null;
   const j = cl.assignOf[studentId];
   const scored = cl.people
     .filter((p) => p.role === 'teacher')

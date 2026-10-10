@@ -34,6 +34,7 @@ export interface StudentHome {
 }
 
 export interface MatchesResponse {
+  reason?: 'no_tutors' | 'profile_required';
   matches: null | { cluster: ClusterSummary; settings: Settings; inCluster: TutorCard[]; others: TutorCard[] };
 }
 
