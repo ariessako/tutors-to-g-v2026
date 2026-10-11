@@ -102,6 +102,13 @@ function TutorDashboard({ me }: { me: Me }) {
   );
 }
 
+/** Opens a file the tutor picked but hasn't uploaded yet, so they can check it first. */
+function previewLocal(f: File) {
+  const url = URL.createObjectURL(f);
+  window.open(url, '_blank', 'noopener');
+  setTimeout(() => URL.revokeObjectURL(url), 60_000);
+}
+
 const INTRO: Record<ApplicationView['status'], string> = {
   draft: 'Upload the four requirements below. An admin reviews every application before a tutor can be matched with students.',
   pending: 'Your documents are with the admin team. You can still replace a file while you wait.',
@@ -177,6 +184,11 @@ function Application() {
                   {f ? `Selected: ${f.name}` : cur ? `On file: ${cur.fileName}` : 'Not uploaded yet'}
                 </div>
               </div>
+              {(f || cur?.fileId) && (
+                <button type="button" className="btn btn-ghost" style={{ height: 36, padding: '0 14px' }} onClick={() => (f ? previewLocal(f) : window.open(`/api/files/${cur!.fileId}`, '_blank', 'noopener'))}>
+                  <Icon name="eye" />{f ? 'Preview' : 'View'}
+                </button>
+              )}
               <label className="btn btn-secondary" style={{ height: 36, padding: '0 14px' }}>
                 <Icon name="upload-simple" />Upload file
                 <input type="file" accept="image/*,.pdf" className="visually-hidden" onChange={(e) => { const file = e.target.files?.[0]; if (file) setPicked({ ...picked, [d.key]: file }); }} />
