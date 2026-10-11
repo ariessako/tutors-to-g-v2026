@@ -15,6 +15,13 @@
       "when": 1791742578276,
       "tag": "0001_premium_iron_monger",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1791742669877,
+      "tag": "0002_cooing_blonde_phantom",
+      "breakpoints": true
     }
   ]
 }

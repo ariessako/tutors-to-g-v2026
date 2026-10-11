@@ -4,6 +4,7 @@ export type Role = 'student' | 'teacher' | 'parent' | 'admin';
 export type UserStatus = 'active' | 'deactivated';
 export type AppStatus = 'draft' | 'pending' | 'needs_changes' | 'approved' | 'rejected';
 export type SessionStatus = 'pending' | 'accepted' | 'declined' | 'completed';
+export type LinkStatus = 'pending_student' | 'pending_admin' | 'approved' | 'declined';
 export type PaymentStatus = 'unpaid' | 'for_review' | 'paid' | 'rejected';
 export type ReviewStatus = 'new' | 'reviewed' | 'action';
 
@@ -45,7 +46,6 @@ export interface Me {
   email: string;
   gradeLabel: string | null;
   school: string | null;
-  childId: string | null;
   profile: Profile | null;
   tutor: (TutorDetails & { slots: string[]; appStatus: AppStatus }) | null;
 }

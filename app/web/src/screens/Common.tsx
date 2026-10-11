@@ -5,10 +5,10 @@ import { validateProfile } from '../../../shared/matching';
 import { fmtDate, fmtStamp, fmtTime, hoursLabel, stars } from '../../../shared/format';
 import { SUBJECTS } from '../../../shared/vocab';
 import { api, useAction, useApi } from '../api';
-import { SESSION } from '../labels';
+import { LINK, SESSION, type LinkView } from '../labels';
 import { ProfileFields, readProfile, readTutor } from '../ProfileFields';
 import type { ReviewView, SessionView } from '../types';
-import { Avatar, CardHead, DateTile, ErrorBox, Field, Icon, Loading, Modal, PageHead, Stat, Tag, useToast } from '../ui';
+import { Avatar, CardHead, DateTile, ErrorBox, Field, Icon, Loading, Modal, PageHead, Seg, Stat, Tag, useToast } from '../ui';
 import { PayTag, StudentModals, type StudentModal } from './Student';
 
 export function Profile({ me }: { me: Me }) {
@@ -344,6 +344,7 @@ function NewThreadModal({ groupId, onClose, onCreated }: { groupId: string; onCl
 }
 
 interface Progress {
+  children: { id: string; name: string }[];
   child: null | { id: string; name: string; gradeLabel: string | null; school: string | null };
   stats: { completed: number; hours: number; upcoming: number; tutors: number };
   sessions: SessionView[];
@@ -352,14 +353,24 @@ interface Progress {
 }
 
 export function ParentProgress() {
-  const q = useApi<Progress>('/parent/progress');
+  const [childId, setChildId] = useState<string | null>(null);
+  const q = useApi<Progress>(childId ? `/parent/progress?child=${encodeURIComponent(childId)}` : '/parent/progress');
   const [modal, setModal] = useState<StudentModal | null>(null);
   if (!q.data) return q.error ? <ErrorBox error={q.error.message} /> : <Loading />;
   const p = q.data;
-  if (!p.child) return <div className="empty">Your account isn’t linked to a student yet. Ask your child for the email they signed up with.</div>;
+  if (!p.child)
+    return (
+      <div className="empty" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
+        You aren’t linked to a student yet. Your child confirms each request, then an admin verifies it.
+        <Link to="/children" className="btn btn-primary"><Icon name="link" />Link a child</Link>
+      </div>
+    );
   const first = p.child.name.split(' ')[0];
   return (
     <section className="page">
+      {p.children.length > 1 && (
+        <Seg label="Child" value={p.child.id} onChange={setChildId} options={p.children.map((c) => ({ value: c.id, label: c.name }))} />
+      )}
       <header className="row" style={{ gap: 16 }}>
         <Avatar name={p.child.name} size={60} />
         <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
@@ -433,6 +444,66 @@ export function ParentProgress() {
         </div>
       </div>
       <StudentModals modal={modal} onClose={() => setModal(null)} />
+    </section>
+  );
+}
+
+/** A parent's link requests, and the form to ask to follow another child. */
+export function ParentChildren() {
+  const q = useApi<{ links: LinkView[] }>('/parent/links');
+  const { run, error, busy } = useAction();
+  const toast = useToast();
+  const [formKey, setFormKey] = useState(0);
+
+  async function request(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const email = String(new FormData(e.currentTarget).get('email') ?? '').trim();
+    const r = await run(() => api<{ student: string }>('/parent/links', { body: { email } }));
+    if (!r) return;
+    setFormKey(formKey + 1);
+    toast(`Request sent. ${r.student.split(' ')[0]} confirms it first, then an admin verifies it.`);
+  }
+
+  return (
+    <section className="page" style={{ gap: 18 }}>
+      <PageHead title="Children" sub="Link each child’s student account. Your child confirms the request, then an admin verifies it before you see their sessions." />
+      <form key={formKey} onSubmit={request} className="card card-pad row wrap" style={{ gap: 12, alignItems: 'flex-end', maxWidth: 720 }}>
+        <div style={{ flex: 1, minWidth: 240 }}>
+          <Field label="Your child’s student email"><input className="input" name="email" type="email" required placeholder="e.g. bea@student.ph" /></Field>
+        </div>
+        <button type="submit" className="btn btn-primary" disabled={busy}><Icon name="link" />Send request</button>
+        {error && <div style={{ width: '100%' }}><ErrorBox error={error} /></div>}
+      </form>
+      <div className="card card-clip" style={{ maxWidth: 720 }}>
+        <CardHead icon="users" title="Your requests" />
+        {!q.data ? (
+          q.error ? <ErrorBox error={q.error.message} /> : <Loading />
+        ) : !q.data.links.length ? (
+          <p className="muted" style={{ padding: '16px 20px', fontSize: 13 }}>No requests yet.</p>
+        ) : (
+          <div className="divided">
+            {q.data.links.map((l) => {
+              const st = LINK[l.status];
+              const note =
+                l.status === 'declined'
+                  ? `Declined by ${l.declinedBy === 'admin' ? 'an admin' : l.student.name.split(' ')[0]}. You can send a new request.`
+                  : l.status === 'approved'
+                    ? `Linked since ${fmtDate((l.adminAt ?? l.requestedAt).slice(0, 10))}`
+                    : `Requested ${fmtStamp(l.requestedAt)}`;
+              return (
+                <div key={l.id} className="row" style={{ gap: 12, padding: '12px 20px' }}>
+                  <Avatar name={l.student.name} size={36} />
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontWeight: 600 }}>{l.student.name}</div>
+                    <div className="muted ellipsis" style={{ fontSize: 12 }}>{l.student.email} · {note}</div>
+                  </div>
+                  <Tag tone={st.tone}>{st.label}</Tag>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
     </section>
   );
 }

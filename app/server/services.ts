@@ -1,12 +1,16 @@
 import { randomBytes } from 'node:crypto';
 import { and, eq } from 'drizzle-orm';
 import type { Db } from './db';
-import { applications, reviews, settings as settingsTable, users } from './db/schema';
+import { applications, parentLinks, reviews, settings as settingsTable, users } from './db/schema';
 import { cluster, matchesFor, type ClusterResult, type PersonInput } from '../shared/matching';
 import type { Settings } from '../shared/types';
 
 export const uid = (prefix: string) => prefix + randomBytes(6).toString('base64url');
 export const nowIso = () => new Date().toISOString();
+
+/** Students a parent may follow: those whose link the student and an admin approved. */
+export const childIdsOf = (db: Db, parentId: string) =>
+  db.select({ id: parentLinks.studentId }).from(parentLinks).where(and(eq(parentLinks.parentId, parentId), eq(parentLinks.status, 'approved'))).all().map((l) => l.id);
 
 export const DEFAULT_SETTINGS: Settings = { k: 4, seed: 7, init: 'kmeans++', approach: 'joint' };
 

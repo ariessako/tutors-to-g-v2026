@@ -31,7 +31,6 @@ export function meDto(db: Db, u: User): Me {
     email: u.email,
     gradeLabel: u.gradeLabel,
     school: u.school,
-    childId: u.childId,
     profile: u.profile,
     tutor,
   };

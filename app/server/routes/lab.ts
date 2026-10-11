@@ -4,6 +4,7 @@ import { Router } from 'express';
 import { eq } from 'drizzle-orm';
 import { files } from '../db/schema';
 import { HttpError, requireUser } from '../auth';
+import { childIdsOf } from '../services';
 import type { Ctx } from '../context';
 
 export function labRoutes(ctx: Ctx) {
@@ -17,16 +18,16 @@ export function labRoutes(ctx: Ctx) {
   r.get('/lab', (req, res) => {
     const me = requireUser(req);
     const people = svc.pool();
-    const own = me.role === 'student' ? me.id : me.role === 'parent' ? me.childId : null;
+    const own = new Set(me.role === 'student' ? [me.id] : me.role === 'parent' ? childIdsOf(db, me.id) : []);
     let n = 0;
     const shown = people.map((p) => ({
       id: p.id,
       role: p.role,
       profile: p.profile,
-      name: p.role === 'teacher' || me.role === 'admin' || p.id === own ? p.name : `Student ${++n}`,
+      name: p.role === 'teacher' || me.role === 'admin' || own.has(p.id) ? p.name : `Student ${++n}`,
     }));
     const firstStudent = shown.find((p) => p.role === 'student');
-    const spot = own && shown.some((p) => p.id === own) ? own : shown.some((p) => p.id === 's_bea') ? 's_bea' : firstStudent?.id ?? null;
+    const spot = shown.find((p) => own.has(p.id))?.id ?? (shown.some((p) => p.id === 's_bea') ? 's_bea' : (firstStudent?.id ?? null));
     res.json({ settings: svc.getSettings(), canEdit: me.role === 'admin', people: shown, spotlight: spot });
   });
 

@@ -3,11 +3,11 @@ import { Link, useNavigate, useParams } from 'react-router';
 import type { Me } from '../../../shared/types';
 import { avatar, fmtDate, fmtTime, hoursLabel, peso, stars } from '../../../shared/format';
 import { SUBJECTS, WEEK } from '../../../shared/vocab';
-import { useApi } from '../api';
-import { PAYMENT, SESSION } from '../labels';
+import { api, useAction, useApi } from '../api';
+import { PAYMENT, SESSION, type LinkView } from '../labels';
 import { BookModal, PayModal, RateModal } from '../modals/StudentModals';
 import type { MatchesResponse, SessionView, StudentHome as Home, TutorCard, TutorProfileResponse } from '../types';
-import { Avatar, Bar, CardHead, DateTile, ErrorBox, Icon, Loading, MatchRing, PageHead, Seg, Stat, Tag } from '../ui';
+import { Avatar, Bar, CardHead, DateTile, ErrorBox, Icon, Loading, MatchRing, PageHead, Seg, Stat, Tag, useToast } from '../ui';
 
 export type StudentModal =
   | { type: 'book'; tutorId: string }
@@ -36,6 +36,38 @@ export const Shared = ({ items }: { items: string[] }) => (
   </div>
 );
 
+/** Parents asking to follow this student. Nothing renders when there are none. */
+function ParentRequests() {
+  const q = useApi<{ links: LinkView[] }>('/student/parent-links');
+  const { run, error, busy } = useAction();
+  const toast = useToast();
+  const pending = q.data?.links.filter((l) => l.status === 'pending_student') ?? [];
+  if (!pending.length) return null;
+  const answer = async (l: LinkView, accept: boolean) => {
+    if (await run(() => api(`/student/parent-links/${l.id}`, { body: { accept } })))
+      toast(accept ? `Confirmed. An admin will verify ${l.parent.name} before they can see your sessions.` : 'Request declined.');
+  };
+  return (
+    <div className="card">
+      <CardHead icon="users" title="Parent link requests" sub="Only confirm a parent or guardian you know. They’ll see your sessions and progress once an admin verifies them." />
+      <div className="divided">
+        {pending.map((l) => (
+          <div key={l.id} className="row wrap" style={{ gap: 12, padding: '12px 20px' }}>
+            <Avatar name={l.parent.name} size={36} />
+            <div style={{ flex: 1, minWidth: 200 }}>
+              <div style={{ fontWeight: 600 }}>{l.parent.name}</div>
+              <div className="muted" style={{ fontSize: 12 }}>{l.parent.email} wants to link to your account as your parent</div>
+            </div>
+            <button className="btn btn-primary btn-sm" disabled={busy} onClick={() => answer(l, true)}>Confirm</button>
+            <button className="btn btn-secondary btn-sm" disabled={busy} onClick={() => answer(l, false)}>Decline</button>
+          </div>
+        ))}
+      </div>
+      {error && <div style={{ padding: '0 20px 14px' }}><ErrorBox error={error} /></div>}
+    </div>
+  );
+}
+
 export function StudentHome({ me }: { me: Me }) {
   const q = useApi<Home>('/student/home');
   const [modal, setModal] = useState<StudentModal | null>(null);
@@ -48,6 +80,7 @@ export function StudentHome({ me }: { me: Me }) {
       <PageHead title={`Hi, ${me.name.split(' ')[0]}`} sub="Here’s what’s next for your tutoring.">
         <button className="btn btn-primary" onClick={() => nav('/matches')}><Icon name="sparkle" />Find a tutor</button>
       </PageHead>
+      <ParentRequests />
       <div className="grid stack-md" style={{ gridTemplateColumns: 'minmax(0,1.35fr) minmax(0,1fr)' }}>
         <div className="card" style={{ display: 'flex', flexDirection: 'column' }}>
           <CardHead icon="calendar-star" title={<>Next session {h.moreUp > 0 && <span className="muted" style={{ fontSize: 12, fontFamily: 'var(--font-body)', fontWeight: 400 }}>{h.moreUp} more upcoming</span>}</>}>

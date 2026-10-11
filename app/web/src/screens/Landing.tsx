@@ -180,7 +180,7 @@ function Signup() {
   const [data, setData] = useState<Step1>({ name: '', email: '', password: '', gradeLabel: '', school: '', childEmail: '' });
   const { run, error, setError, busy } = useAction();
 
-  type SignupResult = { me: Me; linked: boolean; cluster: { no: number; count: number } | null };
+  type SignupResult = { me: Me; requested: boolean; cluster: { no: number; count: number } | null };
 
   async function create(body: object) {
     const r = await run(() => api<SignupResult>('/auth/signup', { body }));
@@ -188,9 +188,9 @@ function Signup() {
     signedIn(
       r.me,
       role === 'parent'
-        ? r.linked
-          ? 'Account created and linked to your child.'
-          : 'Account created. No student uses that email yet.'
+        ? r.requested
+          ? 'Account created. Your child confirms the link, then an admin verifies it.'
+          : 'Account created. You can link your child from the Children page.'
         : role === 'teacher'
           ? 'Account created. Upload your documents to apply.'
           : r.cluster
@@ -294,7 +294,7 @@ function Signup() {
       {role === 'parent' && (
         <>
           <Field label="Your child’s student email"><input className="input" name="childEmail" type="email" defaultValue={data.childEmail} placeholder="e.g. bea@student.ph" /></Field>
-          <p className="muted" style={{ fontSize: 12 }}>Parent accounts follow their child’s sessions and leave feedback for tutors.</p>
+          <p className="muted" style={{ fontSize: 12 }}>Parent accounts follow their children’s sessions and leave feedback for tutors. Your child confirms the link, then an admin verifies it.</p>
         </>
       )}
       {role === 'teacher' && (

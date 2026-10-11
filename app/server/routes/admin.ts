@@ -2,7 +2,7 @@ import { randomBytes } from 'node:crypto';
 import { Router } from 'express';
 import { and, eq, ne, sql } from 'drizzle-orm';
 import { z } from 'zod';
-import { applicationDocs, applicationHistory, applications, authSessions, reviews, settings, tutoringSessions, users } from '../db/schema';
+import { applicationDocs, applicationHistory, applications, authSessions, parentLinks, reviews, settings, tutoringSessions, users } from '../db/schema';
 import { HttpError, hashPassword, requireUser } from '../auth';
 import { emailSchema, profileSchema, tutorDetailsSchema, type Ctx } from '../context';
 import { nowIso, uid } from '../services';
@@ -27,6 +27,7 @@ export function adminRoutes(ctx: Ctx) {
     const forReview = db.select().from(tutoringSessions).where(eq(tutoringSessions.paymentStatus, 'for_review')).all();
     const flagged = db.select().from(reviews).all().filter(needsAttention);
     const people = db.select({ status: users.status, role: users.role }).from(users).where(ne(users.role, 'admin')).all();
+    const links = db.select({ id: parentLinks.id }).from(parentLinks).where(eq(parentLinks.status, 'pending_admin')).all();
     const who = nameMap(db, [...forReview.map((x) => x.studentId), ...flagged.map((x) => x.tutorId)]);
     const cl = svc.clusterNow();
     res.json({
@@ -34,6 +35,7 @@ export function adminRoutes(ctx: Ctx) {
         applications: pendingApps.length,
         payments: forReview.length,
         feedback: flagged.length,
+        parentLinks: links.length,
         active: people.filter((p) => p.status === 'active').length,
         deactivated: people.filter((p) => p.status !== 'active').length,
       },

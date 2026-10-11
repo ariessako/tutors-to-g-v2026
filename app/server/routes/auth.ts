@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { and, eq, sql } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { applications, users } from '../db/schema';
 import { HttpError, endSession, hashPassword, requireUser, startSession, verifyPassword } from '../auth';
@@ -8,6 +8,7 @@ import { meDto } from '../views';
 import { DEMO_ACCOUNTS, DEMO_PASSWORD, seedDemo } from '../seed';
 import { iso } from '../../shared/format';
 import { uid } from '../services';
+import { requestLink } from './links';
 
 const signupSchema = z.object({
   role: z.enum(['student', 'teacher', 'parent']),
@@ -50,7 +51,7 @@ export function authRoutes(ctx: Ctx) {
     if (d.role !== 'parent' && !d.profile) throw new HttpError(400, 'Complete your matching profile.');
     const id = uid(d.role[0] + '_');
     const passwordHash = await hashPassword(d.password);
-    let linked = false;
+    let requested = false;
     db.transaction((tx) => {
       const base = { id, role: d.role, name: d.name, email: d.email, passwordHash, status: 'active' as const, joined: iso(new Date()) };
       if (d.role === 'student') {
@@ -73,13 +74,15 @@ export function authRoutes(ctx: Ctx) {
           .run();
         tx.insert(applications).values({ userId: id, status: 'draft' }).run();
       } else {
-        const child = d.childEmail
-          ? tx.select().from(users).where(and(eq(users.role, 'student'), sql`lower(${users.email}) = ${d.childEmail}`)).get()
-          : undefined;
-        tx.insert(users).values({ ...base, childId: child?.id ?? null }).run();
-        if (child) {
-          tx.update(users).set({ parentId: id }).where(eq(users.id, child.id)).run();
-          linked = true;
+        tx.insert(users).values(base).run();
+        // An unknown child email doesn't block sign-up; the parent can ask again later.
+        if (d.childEmail) {
+          try {
+            requestLink(tx, id, d.childEmail);
+            requested = true;
+          } catch (e) {
+            if (!(e instanceof HttpError)) throw e;
+          }
         }
       }
     });
@@ -89,7 +92,7 @@ export function authRoutes(ctx: Ctx) {
     const m = d.role === 'student' ? svc.matches(id) : null;
     res.status(201).json({
       me: meDto(db, u),
-      linked,
+      requested,
       cluster: m ? { no: m.cluster + 1, count: m.inCluster.length } : null,
     });
   });

@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { applications, groupInvites, groupMembers, reviews, tutoringSessions, users } from '../db/schema';
 import { HttpError, requireUser, type User } from '../auth';
 import { saveFile, type Ctx } from '../context';
-import { nowIso, uid } from '../services';
+import { childIdsOf, nowIso, uid } from '../services';
 import { reviewViews, sessionViews } from '../views';
 import { iso, nextDate } from '../../shared/format';
 import { SESSION_HOURS, SESSION_MODES } from '../../shared/vocab';
@@ -214,7 +214,7 @@ export function sessionRoutes(ctx: Ctx) {
     res.status(201).json({ id });
   });
 
-  /** Sessions for the signed-in user: their own as student or tutor, or their child's for parents. */
+  /** Sessions for the signed-in user: their own as student or tutor, or their linked children's for parents. */
   r.get('/sessions', (req, res) => {
     const me = requireUser(req, 'student', 'teacher', 'parent');
     const who =
@@ -222,7 +222,7 @@ export function sessionRoutes(ctx: Ctx) {
         ? eq(tutoringSessions.studentId, me.id)
         : me.role === 'teacher'
           ? eq(tutoringSessions.tutorId, me.id)
-          : eq(tutoringSessions.studentId, me.childId ?? '__none__');
+          : inArray(tutoringSessions.studentId, childIdsOf(db, me.id));
     const rows = db.select().from(tutoringSessions).where(who).all().sort((a, b) => (a.date < b.date ? -1 : 1));
     res.json({ sessions: sessionViews(db, rows) });
   });
@@ -302,14 +302,14 @@ export function sessionRoutes(ctx: Ctx) {
         sessionId: z.string().optional(),
       })
       .parse(req.body);
-    const learnerId = me.role === 'student' ? me.id : me.childId;
-    if (!learnerId) throw new HttpError(403, 'Link your account to your child first.');
+    const learnerIds = me.role === 'student' ? [me.id] : childIdsOf(db, me.id);
+    if (!learnerIds.length) throw new HttpError(403, 'Link your account to your child first.');
     // Lock before reading review history so concurrent submissions share the same limit.
     db.transaction((tx) => {
       const theirs = tx
         .select()
         .from(tutoringSessions)
-        .where(and(eq(tutoringSessions.studentId, learnerId), eq(tutoringSessions.tutorId, d.tutorId)))
+        .where(and(inArray(tutoringSessions.studentId, learnerIds), eq(tutoringSessions.tutorId, d.tutorId)))
         .all();
       if (me.role === 'student' && !d.sessionId) throw new HttpError(400, 'Choose a completed session to review.');
       let session = null;
@@ -334,14 +334,19 @@ export function sessionRoutes(ctx: Ctx) {
 
   r.get('/parent/progress', (req, res) => {
     const me = requireUser(req, 'parent');
-    const child = me.childId ? db.select().from(users).where(eq(users.id, me.childId)).get() : undefined;
-    if (!child) return void res.json({ child: null });
+    const ids = childIdsOf(db, me.id);
+    const children = ids.length ? db.select({ id: users.id, name: users.name }).from(users).where(inArray(users.id, ids)).all() : [];
+    const wanted = typeof req.query.child === 'string' ? req.query.child : children[0]?.id;
+    if (!wanted) return void res.json({ children, child: null });
+    if (!ids.includes(wanted)) throw new HttpError(404, 'You aren’t linked to this student.');
+    const child = db.select().from(users).where(eq(users.id, wanted)).get()!;
     const rows = db.select().from(tutoringSessions).where(eq(tutoringSessions.studentId, child.id)).all().sort((a, b) => (a.date < b.date ? 1 : -1));
     const done = rows.filter((x) => x.status === 'completed');
     const tutorIds = [...new Set(rows.filter((x) => x.status !== 'declined').map((x) => x.tutorId))];
     const tutorRows = tutorIds.length ? db.select({ id: users.id, name: users.name }).from(users).where(inArray(users.id, tutorIds)).all() : [];
     const mine = db.select().from(reviews).where(eq(reviews.authorId, me.id)).all().sort((a, b) => (a.date < b.date ? 1 : -1));
     res.json({
+      children,
       child: { id: child.id, name: child.name, gradeLabel: child.gradeLabel, school: child.school },
       stats: {
         completed: done.length,

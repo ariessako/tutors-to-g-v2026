@@ -1,4 +1,4 @@
-import type { AppStatus, PaymentStatus, ReviewStatus, SessionStatus } from '../../shared/types';
+import type { AppStatus, LinkStatus, PaymentStatus, ReviewStatus, SessionStatus } from '../../shared/types';
 import type { Tone } from './ui';
 
 export type { SessionView, ReviewView } from '../../server/views';
@@ -30,5 +30,24 @@ export const REVIEW: Record<ReviewStatus, { label: string; tone: Tone }> = {
   reviewed: { label: 'Reviewed', tone: 'neutral' },
   action: { label: 'Action taken', tone: 'info' },
 };
+
+export const LINK: Record<LinkStatus, { label: string; tone: Tone }> = {
+  pending_student: { label: 'Waiting for student', tone: 'warn' },
+  pending_admin: { label: 'Waiting for admin', tone: 'warn' },
+  approved: { label: 'Linked', tone: 'ok' },
+  declined: { label: 'Declined', tone: 'neutral' },
+};
+
+/** A parent link as the API returns it. */
+export interface LinkView {
+  id: string;
+  parent: { id: string; name: string; email: string; gradeLabel: string | null };
+  student: { id: string; name: string; email: string; gradeLabel: string | null };
+  status: LinkStatus;
+  declinedBy: 'student' | 'admin' | null;
+  requestedAt: string;
+  studentAt: string | null;
+  adminAt: string | null;
+}
 
 export const ROLE_LABEL = { student: 'Student', teacher: 'Tutor', parent: 'Parent / guardian', admin: 'Admin' } as const;

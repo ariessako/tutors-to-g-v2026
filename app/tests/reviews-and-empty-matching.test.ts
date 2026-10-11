@@ -7,7 +7,7 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { createApp } from '../server/app';
 import { hashPassword } from '../server/auth';
 import { openDb } from '../server/db';
-import { applications, reviews, tutoringSessions, users } from '../server/db/schema';
+import { applications, parentLinks, reviews, tutoringSessions, users } from '../server/db/schema';
 import type { SessionStatus } from '../shared/types';
 
 let db: ReturnType<typeof openDb>;
@@ -22,8 +22,9 @@ beforeEach(() => {
   dir = mkdtempSync(join(tmpdir(), 'ttg-regression-'));
   db = openDb(join(dir, 'test.db'));
   for (const [id, role] of [['s1', 'student'], ['s2', 'student'], ['t1', 'teacher'], ['p1', 'parent'], ['admin', 'admin']] as const) {
-    db.insert(users).values({ id, role, name: id, email: `${id}@example.test`, passwordHash, joined: '2026-01-01', profile, ...(id === 'p1' ? { childId: 's1' } : {}) }).run();
+    db.insert(users).values({ id, role, name: id, email: `${id}@example.test`, passwordHash, joined: '2026-01-01', profile }).run();
   }
+  db.insert(parentLinks).values({ id: 'pl1', parentId: 'p1', studentId: 's1', status: 'approved', requestedAt: '2026-01-01' }).run();
   db.insert(applications).values({ userId: 't1', status: 'approved' }).run();
   app = createApp({ db, uploadsDir: join(dir, 'uploads'), demo: false }).app;
 });

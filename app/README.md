@@ -11,7 +11,7 @@ npm install
 npm run dev        # API on :3001 and the web app on http://localhost:5173
 ```
 
-On first start the server creates `data/ttg.db` (SQLite) and loads demo data. The login page lists the demo accounts; every password is `demo123`.
+On first start the server creates `data/ttg.db` (SQLite) and loads demo data, including mock PDFs for the seeded tutor documents and receipts. The login page lists the demo accounts; every password is `demo123`.
 
 | Account | Email |
 |---|---|
@@ -44,8 +44,8 @@ Environment variables: `PORT` (default 3001), `TTG_DATA` (data directory, defaul
 
 - **Students** see their cluster and ranked matches, request sessions from a tutor's open weekly slots, pay by uploading a receipt, rate completed sessions (optionally anonymously) and join study groups.
 - **Tutors** apply by uploading their PRC license, PSA birth certificate, transcript and a demo video link. Once an admin approves them they enter the matching pool and can manage requests, their weekly schedule, reviews and groups.
-- **Parents** link to their child's account at sign-up, follow the child's sessions and review the child's tutors.
-- **Admins** review applications, verify payment receipts, moderate reviews, manage the tutor store and accounts, and set the live matching model (k, seed, start method, joint or tutor-only clustering) from the K-means lab.
+- **Parents** ask to link one or more children's accounts, at sign-up or from the Children page. The student confirms each request and an admin then verifies it; only then can the parent follow that child's sessions and review their tutors.
+- **Admins** review applications, verify payment receipts and parent links, moderate reviews, manage the tutor store and accounts, and set the live matching model (k, seed, start method, joint or tutor-only clustering) from the K-means lab.
 
 ## Differences from the design
 

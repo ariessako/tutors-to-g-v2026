@@ -1,6 +1,7 @@
 import { integer, primaryKey, real, sqliteTable, text } from 'drizzle-orm/sqlite-core';
 import type {
   AppStatus,
+  LinkStatus,
   PaymentStatus,
   Profile,
   ReviewStatus,
@@ -20,9 +21,6 @@ export const users = sqliteTable('users', {
   // Students
   gradeLabel: text('grade_label'),
   school: text('school'),
-  parentId: text('parent_id'),
-  // Parents
-  childId: text('child_id'),
   // Students and tutors
   profile: text('profile', { mode: 'json' }).$type<Profile>(),
   // Tutors
@@ -110,6 +108,22 @@ export const tutoringSessions = sqliteTable('tutoring_sessions', {
   amountPaid: real('amount_paid'),
   receiptAt: text('receipt_at'),
   reviewedAt: text('reviewed_at'),
+});
+
+/**
+ * A parent's request to follow a student. The student confirms it first, then
+ * an admin verifies it; only `approved` links give the parent access.
+ */
+export const parentLinks = sqliteTable('parent_links', {
+  id: text('id').primaryKey(),
+  parentId: text('parent_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  studentId: text('student_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  status: text('status').$type<LinkStatus>().notNull(),
+  /** Who declined the request, when it was declined. */
+  declinedBy: text('declined_by').$type<'student' | 'admin'>(),
+  requestedAt: text('requested_at').notNull(),
+  studentAt: text('student_at'),
+  adminAt: text('admin_at'),
 });
 
 export const reviews = sqliteTable('reviews', {

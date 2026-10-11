@@ -4,7 +4,7 @@ import type { AppStatus, PaymentStatus, Profile, TutorDetails } from '../../../s
 import { validateProfile } from '../../../shared/matching';
 import { fmtDate, fmtStamp, peso, stars } from '../../../shared/format';
 import { api, useAction, useApi } from '../api';
-import { APPLICATION, REVIEW } from '../labels';
+import { APPLICATION, LINK, REVIEW, type LinkView } from '../labels';
 import { attempt, ConfirmModal, type ConfirmSpec } from '../modals/Confirm';
 import { ProfileFields, readProfile, readTutor } from '../ProfileFields';
 import type { ReviewView } from '../types';
@@ -20,7 +20,7 @@ function useOpenFile() {
 }
 
 interface Overview {
-  counts: { applications: number; payments: number; feedback: number; active: number; deactivated: number };
+  counts: { applications: number; payments: number; feedback: number; parentLinks: number; active: number; deactivated: number };
   queue: {
     apps: { id: string; name: string; subjects: string[] }[];
     payments: { id: string; student: string; amount: number; file: string | null }[];
@@ -38,6 +38,7 @@ export function AdminOverview() {
     { n: c.applications, icon: 'identification-card', label: 'Applications to review', sub: 'PRC, PSA, TOR and demo video', to: '/admin/applications' },
     { n: c.payments, icon: 'receipt', label: 'Payments to approve', sub: 'Receipts uploaded by students', to: '/admin/payments' },
     { n: c.feedback, icon: 'chat-circle-text', label: 'Feedback to check', sub: 'New ratings of 3 stars or lower', to: '/admin/feedback' },
+    { n: c.parentLinks, icon: 'link', label: 'Parent links to verify', sub: 'Confirmed by the student', to: '/admin/parent-links' },
     { n: c.active, icon: 'users', label: 'Active accounts', sub: `${c.deactivated} deactivated`, to: '/admin/accounts' },
   ];
   const today = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
@@ -578,6 +579,81 @@ export function AdminPayments() {
                           <>
                             <button className="btn btn-primary btn-xs" onClick={() => approve(p)}>Approve</button>{' '}
                             <button className="btn btn-secondary btn-xs" onClick={() => reject(p)}>Reject</button>
+                          </>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+      {confirm && <ConfirmModal spec={confirm} onClose={() => setConfirm(null)} />}
+    </section>
+  );
+}
+
+const LINK_FILTERS = [
+  { value: 'pending_admin', label: 'To verify' },
+  { value: 'pending_student', label: 'Waiting for student' },
+  { value: 'approved', label: 'Linked' },
+  { value: 'declined', label: 'Declined' },
+  { value: 'all', label: 'All' },
+] as const;
+
+export function AdminParentLinks() {
+  const q = useApi<{ links: LinkView[] }>('/admin/parent-links');
+  const [filter, setFilter] = useState<(typeof LINK_FILTERS)[number]['value']>('pending_admin');
+  const [confirm, setConfirm] = useState<ConfirmSpec | null>(null);
+  const { run, error } = useAction();
+  const toast = useToast();
+  if (!q.data) return q.error ? <ErrorBox error={q.error.message} /> : <Loading />;
+  const all = q.data.links;
+  const list = all.filter((l) => filter === 'all' || l.status === filter);
+  const approve = async (l: LinkView) => {
+    if (await run(() => api(`/admin/parent-links/${l.id}`, { body: { approve: true } }))) toast(`${l.parent.name} can now follow ${l.student.name}.`);
+  };
+  const reject = (l: LinkView) =>
+    setConfirm({
+      title: 'Reject this link?',
+      body: `${l.parent.name} won’t see ${l.student.name}’s sessions. They can send a new request.`,
+      yes: 'Reject link',
+      action: attempt(() => api(`/admin/parent-links/${l.id}`, { body: { approve: false } }), () => toast('Link rejected.')),
+    });
+  return (
+    <section className="page" style={{ gap: 18 }}>
+      <PageHead title="Parent links" sub="Each request is confirmed by the student first. Verify the parent before approving; they then see the student’s sessions and progress." />
+      <Seg
+        label="Link status"
+        value={filter}
+        onChange={setFilter}
+        options={LINK_FILTERS.map((f) => ({ value: f.value, label: `${f.label} · ${f.value === 'all' ? all.length : all.filter((l) => l.status === f.value).length}` }))}
+      />
+      <ErrorBox error={error} />
+      <div className="card card-clip">
+        {!list.length ? (
+          <p className="muted" style={{ padding: 24, textAlign: 'center' }}>Nothing here.</p>
+        ) : (
+          <div className="table-scroll">
+            <table className="table hover">
+              <thead><tr><th>Parent</th><th>Student</th><th>Requested</th><th>Student confirmed</th><th>Status</th><th /></tr></thead>
+              <tbody>
+                {list.map((l) => {
+                  const st = LINK[l.status];
+                  return (
+                    <tr key={l.id}>
+                      <td><div className="row"><Avatar name={l.parent.name} size={30} /><div><div style={{ fontWeight: 600 }}>{l.parent.name}</div><div className="muted" style={{ fontSize: 12 }}>{l.parent.email}</div></div></div></td>
+                      <td><div style={{ fontWeight: 600 }}>{l.student.name}</div><div className="muted" style={{ fontSize: 12 }}>{[l.student.gradeLabel, l.student.email].filter(Boolean).join(' · ')}</div></td>
+                      <td className="nowrap">{fmtStamp(l.requestedAt)}</td>
+                      <td className="nowrap">{l.studentAt && !(l.status === 'declined' && l.declinedBy === 'student') ? fmtStamp(l.studentAt) : '—'}</td>
+                      <td><Tag tone={st.tone} size="sm">{l.status === 'declined' ? `Declined by ${l.declinedBy === 'admin' ? 'admin' : 'student'}` : st.label}</Tag></td>
+                      <td className="nowrap" style={{ textAlign: 'right' }}>
+                        {l.status === 'pending_admin' && (
+                          <>
+                            <button className="btn btn-primary btn-xs" onClick={() => approve(l)}>Approve</button>{' '}
+                            <button className="btn btn-secondary btn-xs" onClick={() => reject(l)}>Reject</button>
                           </>
                         )}
                       </td>

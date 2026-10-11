@@ -127,7 +127,7 @@ export async function seedDemo(db: Db, uploadsDir: string, today = new Date()) {
     return out;
   }
 
-  const used = new Set(['Bea Santos', 'Paolo Reyes', 'Jen Dizon', 'Liza Santos']);
+  const used = new Set(['Bea Santos', 'Paolo Reyes', 'Jen Dizon', 'Liza Santos', 'Miguel Santos', 'Ramon Santos']);
   const name = () => {
     let n: string;
     do n = `${pick(FIRST)} ${pick(LAST)}`;
@@ -256,10 +256,10 @@ export async function seedDemo(db: Db, uploadsDir: string, today = new Date()) {
   };
   student('s_bea', 'Bea Santos',
     { hobbies: ['Basketball', 'Volleyball', 'Music'], learning: 'Visual', social: 0.62, approach: 0.45, subjects: ['Math', 'Science'], sched: ['Weekday evenings'], grades: ['Junior High'] },
-    { email: 'bea@student.ph', gradeLabel: 'Grade 10', school: 'Rizal High School, Pasig', parentId: 'p_liza' });
+    { email: 'bea@student.ph', gradeLabel: 'Grade 10', school: 'Rizal High School, Pasig' });
   for (let i = 0; i < 59; i++) student(`s${i}`, name(), gen(ARCH[i % 4], false));
   userRows.find((u) => u.id === 's7')!.status = 'deactivated';
-  userRows.push({ ...base('p_liza', 'parent', 'Liza Santos', 'liza@parent.ph', 87), childId: 's_bea' });
+  userRows.push(base('p_liza', 'parent', 'Liza Santos', 'liza@parent.ph', 87));
 
   const S = userRows.filter((u) => u.role === 'student');
   const approvedIds = new Set(appRows.filter((a) => a.status === 'approved').map((a) => a.userId));
@@ -348,13 +348,28 @@ export async function seedDemo(db: Db, uploadsDir: string, today = new Date()) {
     { threadId: 'th3', authorId: 's0', at: stampAgo(3, 16, 10), text: 'Uploaded my sketch of plant vs animal cells. Tips welcome.' },
   ];
 
+  // Parent links: Liza follows Bea; Bea's younger brother confirmed Liza's
+  // request and awaits an admin; their father's request awaits Bea. Miguel is
+  // added after the random data so the rest of the dataset stays the same.
+  userRows.push(
+    { ...base('s_miguel', 'student', 'Miguel Santos', 'miguel@student.ph', 3), gradeLabel: 'Grade 7', school: 'Rizal High School, Pasig',
+      profile: { hobbies: ['Basketball', 'Gaming', 'Drawing'], learning: 'Kinesthetic', social: 0.7, approach: 0.6, subjects: ['Science', 'Math'], sched: ['Weekends'], grades: ['Junior High'] } },
+    base('p_ramon', 'parent', 'Ramon Santos', 'ramon@parent.ph', 2),
+  );
+  const linkRows: (typeof t.parentLinks.$inferInsert)[] = [
+    { id: 'pl_liza_bea', parentId: 'p_liza', studentId: 's_bea', status: 'approved', requestedAt: stampAgo(87, 9), studentAt: stampAgo(87, 18), adminAt: stampAgo(86, 10) },
+    { id: 'pl_liza_miguel', parentId: 'p_liza', studentId: 's_miguel', status: 'pending_admin', requestedAt: stampAgo(1, 19), studentAt: stampAgo(1, 20, 30) },
+    { id: 'pl_ramon_bea', parentId: 'p_ramon', studentId: 's_bea', status: 'pending_student', requestedAt: stampAgo(0, 8, 15) },
+  ];
+
   const oldFiles = db.select({ storedName: t.files.storedName }).from(t.files).all();
   db.transaction((tx) => {
-    for (const table of [t.posts, t.threads, t.groupInvites, t.groupMembers, t.groups, t.reviews, t.tutoringSessions, t.applicationHistory, t.applicationDocs, t.applications, t.authSessions, t.files, t.settings, t.users]) {
+    for (const table of [t.parentLinks, t.posts, t.threads, t.groupInvites, t.groupMembers, t.groups, t.reviews, t.tutoringSessions, t.applicationHistory, t.applicationDocs, t.applications, t.authSessions, t.files, t.settings, t.users]) {
       tx.delete(table).run();
     }
     tx.run(sql`DELETE FROM sqlite_sequence`);
     for (let i = 0; i < userRows.length; i += 50) tx.insert(t.users).values(userRows.slice(i, i + 50)).run();
+    tx.insert(t.parentLinks).values(linkRows).run();
     for (let i = 0; i < fileRows.length; i += 50) tx.insert(t.files).values(fileRows.slice(i, i + 50)).run();
     tx.insert(t.applications).values(appRows).run();
     tx.insert(t.applicationDocs).values(docRows).run();

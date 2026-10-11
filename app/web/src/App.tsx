@@ -5,7 +5,7 @@ import { useMe } from './api';
 import { homePath, Shell } from './Shell';
 import { Landing } from './screens/Landing';
 import { Matches, StudentHome, StudentSessions, TutorProfile } from './screens/Student';
-import { Group, Groups, ParentProgress, Profile } from './screens/Common';
+import { Group, Groups, ParentChildren, ParentProgress, Profile } from './screens/Common';
 import { TutorHome, TutorReviews, TutorSchedule, TutorSessions } from './screens/Tutor';
 
 // Admin screens and the lab load on demand; most users never open them.
@@ -15,6 +15,7 @@ const AdminApplications = lazy(() => admin().then((m) => ({ default: m.AdminAppl
 const AdminTutors = lazy(() => admin().then((m) => ({ default: m.AdminTutors })));
 const AdminAccounts = lazy(() => admin().then((m) => ({ default: m.AdminAccounts })));
 const AdminPayments = lazy(() => admin().then((m) => ({ default: m.AdminPayments })));
+const AdminParentLinks = lazy(() => admin().then((m) => ({ default: m.AdminParentLinks })));
 const AdminFeedback = lazy(() => admin().then((m) => ({ default: m.AdminFeedback })));
 const Lab = lazy(() => import('./screens/Lab').then((m) => ({ default: m.Lab })));
 import { Loading } from './ui';
@@ -65,11 +66,13 @@ const router = createBrowserRouter([
       { path: '/tutor/schedule', element: page(['teacher'], (me) => <TutorSchedule me={me} />, true) },
       { path: '/tutor/reviews', element: page(['teacher'], () => <TutorReviews />, true) },
       { path: '/progress', element: page(['parent'], () => <ParentProgress />) },
+      { path: '/children', element: page(['parent'], () => <ParentChildren />) },
       { path: '/admin', element: page(['admin'], () => <AdminOverview />) },
       { path: '/admin/applications', element: page(['admin'], () => <AdminApplications />) },
       { path: '/admin/tutors', element: page(['admin'], () => <AdminTutors />) },
       { path: '/admin/accounts', element: page(['admin'], () => <AdminAccounts />) },
       { path: '/admin/payments', element: page(['admin'], () => <AdminPayments />) },
+      { path: '/admin/parent-links', element: page(['admin'], () => <AdminParentLinks />) },
       { path: '/admin/feedback', element: page(['admin'], () => <AdminFeedback />) },
       { path: '*', element: <Navigate to="/" replace /> },
     ],

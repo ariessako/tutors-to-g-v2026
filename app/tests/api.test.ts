@@ -209,6 +209,58 @@ describe('tutor application', () => {
   });
 });
 
+describe('parent links', () => {
+  it('needs the student and then an admin before a parent sees a child', async () => {
+    const parent = request.agent(app);
+    const signup = await parent.post('/api/auth/signup').send({ role: 'parent', name: 'Test Parent', email: 'test.parent@example.com', password: 'secret1', childEmail: 'BEA@student.ph' });
+    expect(signup.status).toBe(201);
+    expect(signup.body.requested).toBe(true);
+    expect((await parent.get('/api/parent/progress')).body.child).toBeNull();
+    expect((await parent.get('/api/sessions')).body.sessions).toEqual([]);
+    expect((await parent.get('/api/parent/progress?child=s_bea')).status).toBe(404);
+    expect((await parent.post('/api/parent/links').send({ email: 'bea@student.ph' })).status).toBe(409);
+    expect((await parent.post('/api/parent/links').send({ email: 'nobody@student.ph' })).status).toBe(404);
+    const [link] = (await parent.get('/api/parent/links')).body.links;
+    expect(link.status).toBe('pending_student');
+
+    // The admin can't approve before the student confirms, and a parent can't approve at all.
+    const admin = await as('admin@tutorstogo.ph');
+    expect((await admin.post(`/api/admin/parent-links/${link.id}`).send({ approve: true })).status).toBe(409);
+    expect((await parent.post(`/api/admin/parent-links/${link.id}`).send({ approve: true })).status).toBe(403);
+    // Only the requested student can answer.
+    const other = await as('miguel@student.ph');
+    expect((await other.post(`/api/student/parent-links/${link.id}`).send({ accept: true })).status).toBe(404);
+
+    const bea = await as('bea@student.ph');
+    const requests = (await bea.get('/api/student/parent-links')).body.links;
+    expect(requests.map((l: { parent: { name: string } }) => l.parent.name)).toEqual(expect.arrayContaining(['Test Parent', 'Ramon Santos', 'Liza Santos']));
+    expect((await bea.post(`/api/student/parent-links/${link.id}`).send({ accept: false })).status).toBe(200);
+    expect((await parent.get('/api/parent/links')).body.links[0]).toMatchObject({ status: 'declined', declinedBy: 'student' });
+
+    // After a decline the parent can ask again.
+    expect((await parent.post('/api/parent/links').send({ email: 'bea@student.ph' })).status).toBe(201);
+    const again = (await parent.get('/api/parent/links')).body.links.find((l: { status: string }) => l.status === 'pending_student');
+    expect((await bea.post(`/api/student/parent-links/${again.id}`).send({ accept: true })).status).toBe(200);
+    expect((await parent.get('/api/parent/progress')).body.child).toBeNull();
+    expect((await admin.post(`/api/admin/parent-links/${again.id}`).send({ approve: true })).status).toBe(200);
+    const progress = (await parent.get('/api/parent/progress')).body;
+    expect(progress.child.id).toBe('s_bea');
+    expect(progress.sessions.length).toBeGreaterThan(0);
+  });
+
+  it('lets a parent follow more than one child', async () => {
+    const liza = await as('liza@parent.ph');
+    expect((await liza.get('/api/parent/progress')).body.children.map((c: { id: string }) => c.id)).toEqual(['s_bea']);
+    expect((await liza.get('/api/parent/progress?child=s_miguel')).status).toBe(404);
+    const admin = await as('admin@tutorstogo.ph');
+    const queue = (await admin.get('/api/admin/parent-links')).body.links.filter((l: { status: string }) => l.status === 'pending_admin');
+    const miguel = queue.find((l: { student: { id: string } }) => l.student.id === 's_miguel');
+    expect((await admin.post(`/api/admin/parent-links/${miguel.id}`).send({ approve: true })).status).toBe(200);
+    expect((await liza.get('/api/parent/progress')).body.children.map((c: { id: string }) => c.id).sort()).toEqual(['s_bea', 's_miguel']);
+    expect((await liza.get('/api/parent/progress?child=s_miguel')).body.child.name).toBe('Miguel Santos');
+  });
+});
+
 describe('admin settings', () => {
   it('changes the live model', async () => {
     const admin = await as('admin@tutorstogo.ph');
