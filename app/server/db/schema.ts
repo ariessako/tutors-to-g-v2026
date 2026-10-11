@@ -43,7 +43,7 @@ export const authSessions = sqliteTable('auth_sessions', {
   expiresAt: text('expires_at').notNull(),
 });
 
-/** Uploaded files. Seeded demo records may reference a file name with no stored file. */
+/** Uploaded files. The demo seed adds mock PDFs for its documents and receipts. */
 export const files = sqliteTable('files', {
   id: text('id').primaryKey(),
   ownerId: text('owner_id').references(() => users.id, { onDelete: 'set null' }),

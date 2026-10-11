@@ -101,7 +101,7 @@ export function authRoutes(ctx: Ctx) {
 
   r.post('/demo/reset', async (req, res) => {
     if (!ctx.demo) throw new HttpError(404, 'Not found.');
-    await seedDemo(db);
+    await seedDemo(db, ctx.uploadsDir);
     svc.bump();
     endSession(db, req, res);
     res.json({ ok: true });

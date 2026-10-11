@@ -3,14 +3,17 @@
  * applicants, 60 students, a parent and an admin, with sessions, reviews and
  * study groups. Dates are relative to the day the seed runs.
  */
+import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { sql } from 'drizzle-orm';
 import type { Db } from './db';
 import * as t from './db/schema';
 import { hashPassword } from './auth';
 import { DEFAULT_SETTINGS } from './services';
+import { mockPdf } from './mockPdf';
 import { rng } from '../shared/matching';
 import { addDays, iso, nextDate } from '../shared/format';
-import { CURRICULA, HOBBIES, LEARNING, METHODS, SCHED, SUBJECTS } from '../shared/vocab';
+import { CURRICULA, DOC_KINDS, HOBBIES, LEARNING, METHODS, SCHED, SUBJECTS } from '../shared/vocab';
 import type { AppStatus, Profile } from '../shared/types';
 
 export const DEMO_PASSWORD = 'demo123';
@@ -65,8 +68,12 @@ const SCHOOLS = ['Rizal High School, Pasig', 'Quezon City Science HS', 'Manila S
 
 type UserRow = typeof t.users.$inferInsert;
 
-/** Wipes every table and inserts the demo dataset. */
-export async function seedDemo(db: Db, today = new Date()) {
+/**
+ * Wipes every table and inserts the demo dataset. Uploaded files are removed
+ * from `uploadsDir` and replaced with mock PDFs for the seeded documents and
+ * receipts.
+ */
+export async function seedDemo(db: Db, uploadsDir: string, today = new Date()) {
   const r = rng(2026);
   const pick = <T>(a: readonly T[]) => a[Math.floor(r() * a.length)];
   const clamp = (v: number) => Math.max(0, Math.min(1, v));
@@ -133,6 +140,17 @@ export async function seedDemo(db: Db, today = new Date()) {
   const userRows: UserRow[] = [];
   const appRows: (typeof t.applications.$inferInsert)[] = [];
   const docRows: (typeof t.applicationDocs.$inferInsert)[] = [];
+  const fileRows: (typeof t.files.$inferInsert)[] = [];
+  const fileData = new Map<string, Buffer>();
+  /** Adds a mock PDF owned by `ownerId` and returns its file id. */
+  const mockFile = (ownerId: string, originalName: string, createdAt: string, title: string, lines: string[]) => {
+    const id = `f_seed${fileRows.length + 1}`;
+    const storedName = `seed-${fileRows.length + 1}.pdf`;
+    const data = mockPdf(title, lines);
+    fileData.set(storedName, data);
+    fileRows.push({ id, ownerId, originalName, storedName, mime: 'application/pdf', size: data.length, createdAt });
+    return id;
+  };
   const histRows: (typeof t.applicationHistory.$inferInsert)[] = [];
   const base = (id: string, role: UserRow['role'], nm: string, email: string, joinedDaysAgo: number): UserRow => ({
     id, role, name: nm, email, passwordHash, status: 'active', joined: dayAgo(joinedDaysAgo),
@@ -140,12 +158,14 @@ export async function seedDemo(db: Db, today = new Date()) {
 
   userRows.push(base('admin', 'admin', 'Registrar Admin', 'admin@tutorstogo.ph', 265));
 
-  function addDocs(id: string, s: string) {
-    docRows.push(
-      { userId: id, kind: 'prc', fileName: `PRC-license-${s}.pdf` },
-      { userId: id, kind: 'birth', fileName: `PSA-birth-certificate-${s}.pdf` },
-      { userId: id, kind: 'tor', fileName: `TOR-${s}.pdf` },
-    );
+  const DOC_FILE: Record<string, string> = { prc: 'PRC-license', birth: 'PSA-birth-certificate', tor: 'TOR' };
+  function addDocs(id: string, nm: string, uploadedDaysAgo: number) {
+    const s = slug(nm);
+    for (const d of DOC_KINDS) {
+      const fileName = `${DOC_FILE[d.key]}-${s}.pdf`;
+      const fileId = mockFile(id, fileName, stampAgo(uploadedDaysAgo, 10), d.label, [`Name: ${nm}`, `Document: ${d.label}`, `Reference no.: ${d.key.toUpperCase()}-${id.toUpperCase()}-2026`]);
+      docRows.push({ userId: id, kind: d.key, fileName, fileId });
+    }
     return `https://youtu.be/ttg-demo-${s}`;
   }
 
@@ -173,9 +193,9 @@ export async function seedDemo(db: Db, today = new Date()) {
     return row;
   }
 
-  function approve(id: string, s: string) {
-    const video = addDocs(id, s);
+  function approve(id: string, nm: string) {
     const submitted = 50 + Math.floor(r() * 8);
+    const video = addDocs(id, nm, submitted);
     appRows.push({ userId: id, status: 'approved', submittedAt: dayAgo(submitted), note: '', video });
     histRows.push(
       { userId: id, status: 'pending', at: stampAgo(submitted, 10) },
@@ -198,17 +218,17 @@ export async function seedDemo(db: Db, today = new Date()) {
       slots: ['Mon 17:00', 'Mon 18:00', 'Tue 17:00', 'Tue 18:00', 'Wed 18:00', 'Thu 17:00', 'Thu 19:00', 'Sat 09:00', 'Sat 10:00', 'Sat 11:00'],
     },
   );
-  approve(paolo.id, 'paolo.reyes');
+  approve(paolo.id, paolo.name);
   for (let i = 0; i < 39; i++) {
     const nm = name();
     tutor(`t${i}`, nm, gen(ARCH[i % 4], true));
-    approve(`t${i}`, slug(nm));
+    approve(`t${i}`, nm);
   }
 
   function applicant(id: string, nm: string, status: AppStatus, note: string, withDocs: boolean, overrides: Partial<UserRow> = {}, email?: string) {
     tutor(id, nm, gen(ARCH[Math.floor(r() * 4)], true), overrides, email);
     const submittedDays = 1 + Math.floor(r() * 6);
-    const video = withDocs ? addDocs(id, slug(nm)) : null;
+    const video = withDocs ? addDocs(id, nm, submittedDays) : null;
     appRows.push({ userId: id, status, submittedAt: withDocs ? dayAgo(submittedDays) : null, note, video });
     if (withDocs) histRows.push({ userId: id, status: 'pending', at: stampAgo(submittedDays, 11) });
     if (status === 'needs_changes') histRows.push({ userId: id, status, at: stampAgo(0, 9), note });
@@ -251,6 +271,11 @@ export async function seedDemo(db: Db, today = new Date()) {
   let sid = 0;
   const ses = (o: Omit<typeof t.tutoringSessions.$inferInsert, 'id' | 'createdAt'> & { createdAt?: string }) => {
     const row = { id: `ses${++sid}`, createdAt: stampAgo(14, 12), ...o };
+    if (row.receiptName && row.receiptAt) {
+      const lines = [`Paid by: ${byId(row.studentId).name}`, `Paid to: Tutors To Go`, `Amount: PHP ${(row.amountPaid ?? row.amount).toLocaleString('en-US')}`, `Date: ${row.receiptAt.slice(0, 10)}`];
+      if (row.paymentTxn) lines.push(`Reference no.: ${row.paymentTxn}`);
+      row.receiptFileId = mockFile(row.studentId, row.receiptName, row.receiptAt, 'Payment receipt', lines);
+    }
     sessRows.push(row);
     return row;
   };
@@ -260,20 +285,20 @@ export async function seedDemo(db: Db, today = new Date()) {
     return u.gradeLabel ? `${u.name}, ${u.gradeLabel}` : u.name;
   };
   ses({ studentId: 's_bea', tutorId: 't_paolo', subject: 'Math', date: upcoming('Tue 17:00'), slot: 'Tue 17:00', hours: 1.5, mode: 'Online (Google Meet)', topic: 'Quadratic equations: factoring and word problems', learner: 'Bea Santos, Grade 10', guardian: 'Liza Santos · 0917 555 0142', status: 'accepted', amount: 675 });
-  ses({ studentId: 's_bea', tutorId: 't_paolo', subject: 'Math', date: lastWeek('Tue 17:00'), slot: 'Tue 17:00', hours: 1.5, mode: 'Online (Google Meet)', topic: 'Systems of linear equations', learner: 'Bea Santos, Grade 10', status: 'completed', amount: 675, paymentStatus: 'paid', paymentTxn: '5TY20931KD448722N', receiptName: 'paypal-receipt-sep20.png', amountPaid: 675, receiptAt: stampAgo(7, 19, 12), reviewedAt: stampAgo(6, 9) });
+  ses({ studentId: 's_bea', tutorId: 't_paolo', subject: 'Math', date: lastWeek('Tue 17:00'), slot: 'Tue 17:00', hours: 1.5, mode: 'Online (Google Meet)', topic: 'Systems of linear equations', learner: 'Bea Santos, Grade 10', status: 'completed', amount: 675, paymentStatus: 'paid', paymentTxn: '5TY20931KD448722N', receiptName: 'receipt-bank-transfer.pdf', amountPaid: 675, receiptAt: stampAgo(7, 19, 12), reviewedAt: stampAgo(6, 9) });
   ses({ studentId: 's_bea', tutorId: sci.id, subject: 'Science', date: upcoming('Thu 18:00'), slot: 'Thu 18:00', hours: 1, mode: 'Online (Google Meet)', topic: 'Chemical reactions and balancing equations', learner: 'Bea Santos, Grade 10', status: 'pending', amount: sci.rate! });
-  ses({ studentId: 's_bea', tutorId: 't_paolo', subject: 'Science', date: upcoming('Sat 10:00'), slot: 'Sat 10:00', hours: 1, mode: 'In-person', topic: 'Electricity and circuits review', learner: 'Bea Santos, Grade 10', status: 'accepted', amount: 450, paymentStatus: 'for_review', paymentTxn: '8XK29341LM002144', receiptName: 'paypal-receipt-sep26.png', amountPaid: 450, receiptAt: stampAgo(1, 20, 5) });
+  ses({ studentId: 's_bea', tutorId: 't_paolo', subject: 'Science', date: upcoming('Sat 10:00'), slot: 'Sat 10:00', hours: 1, mode: 'In-person', topic: 'Electricity and circuits review', learner: 'Bea Santos, Grade 10', status: 'accepted', amount: 450, paymentStatus: 'for_review', paymentTxn: '8XK29341LM002144', receiptName: 'receipt-gcash.pdf', amountPaid: 450, receiptAt: stampAgo(1, 20, 5) });
   ses({ studentId: 's3', tutorId: 't_paolo', subject: 'Math', date: upcoming('Wed 18:00'), slot: 'Wed 18:00', hours: 1, mode: 'Online (Google Meet)', topic: 'Review for 1st quarter exam: linear functions', learner: learner('s3'), guardian: 'Parent · 0998 555 0189', status: 'pending', amount: 450 });
-  ses({ studentId: 's11', tutorId: 't_paolo', subject: 'Science', date: upcoming('Mon 17:00'), slot: 'Mon 17:00', hours: 1, mode: 'Online (Google Meet)', topic: 'Genetics: Punnett squares', learner: byId('s11').name, status: 'accepted', amount: 450, paymentStatus: 'paid', paymentTxn: '3JW81123AB990012C', receiptName: 'receipt-s11.jpg', amountPaid: 450, receiptAt: stampAgo(2, 18, 30), reviewedAt: stampAgo(1, 10) });
+  ses({ studentId: 's11', tutorId: 't_paolo', subject: 'Science', date: upcoming('Mon 17:00'), slot: 'Mon 17:00', hours: 1, mode: 'Online (Google Meet)', topic: 'Genetics: Punnett squares', learner: byId('s11').name, status: 'accepted', amount: 450, paymentStatus: 'paid', paymentTxn: '3JW81123AB990012C', receiptName: 'receipt-s11.pdf', amountPaid: 450, receiptAt: stampAgo(2, 18, 30), reviewedAt: stampAgo(1, 10) });
   const t3 = Tt[3];
-  ses({ studentId: 's5', tutorId: t3.id, subject: t3.profile!.subjects[0], date: upcoming(t3.slots![0]), slot: t3.slots![0], hours: 1, mode: 'Online (Google Meet)', topic: 'Essay structure', learner: byId('s5').name, status: 'accepted', amount: t3.rate!, paymentStatus: 'for_review', paymentTxn: '1AB44120XY778810P', receiptName: 'gcash-screenshot.png', amountPaid: t3.rate! - 50, receiptAt: stampAgo(0, 8, 40) });
+  ses({ studentId: 's5', tutorId: t3.id, subject: t3.profile!.subjects[0], date: upcoming(t3.slots![0]), slot: t3.slots![0], hours: 1, mode: 'Online (Google Meet)', topic: 'Essay structure', learner: byId('s5').name, status: 'accepted', amount: t3.rate!, paymentStatus: 'for_review', paymentTxn: '1AB44120XY778810P', receiptName: 'gcash-receipt.pdf', amountPaid: t3.rate! - 50, receiptAt: stampAgo(0, 8, 40) });
   const others = S.filter((x) => x.id !== 's_bea');
   for (let w = 1; w <= 8; w++) {
     const n = 2 + Math.floor(r() * 4);
     for (let j = 0; j < n; j++) {
       const st = pick(others);
       const hrs = pick([1, 1, 1.5, 2]);
-      ses({ studentId: st.id, tutorId: 't_paolo', subject: pick(['Math', 'Science']), date: dayAgo(w * 7 - Math.floor(r() * 6)), slot: pick(['Mon 17:00', 'Tue 18:00', 'Thu 17:00', 'Sat 10:00']), hours: hrs, mode: 'Online (Google Meet)', topic: pick(['Linear equations', 'Factoring polynomials', 'Cell structure', 'Forces and motion', 'Quarter exam review']), learner: st.name, status: 'completed', amount: 450 * hrs, rated: 5, paymentStatus: 'paid', paymentTxn: `${sid}PP${Math.floor(r() * 1e9)}`, receiptName: 'receipt.png', amountPaid: 450 * hrs, receiptAt: stampAgo(w * 7, 20), reviewedAt: stampAgo(w * 7 - 1, 9) });
+      ses({ studentId: st.id, tutorId: 't_paolo', subject: pick(['Math', 'Science']), date: dayAgo(w * 7 - Math.floor(r() * 6)), slot: pick(['Mon 17:00', 'Tue 18:00', 'Thu 17:00', 'Sat 10:00']), hours: hrs, mode: 'Online (Google Meet)', topic: pick(['Linear equations', 'Factoring polynomials', 'Cell structure', 'Forces and motion', 'Quarter exam review']), learner: st.name, status: 'completed', amount: 450 * hrs, rated: 5, paymentStatus: 'paid', paymentTxn: `${sid}PP${Math.floor(r() * 1e9)}`, receiptName: 'receipt.pdf', amountPaid: 450 * hrs, receiptAt: stampAgo(w * 7, 20), reviewedAt: stampAgo(w * 7 - 1, 9) });
     }
   }
 
@@ -323,12 +348,14 @@ export async function seedDemo(db: Db, today = new Date()) {
     { threadId: 'th3', authorId: 's0', at: stampAgo(3, 16, 10), text: 'Uploaded my sketch of plant vs animal cells. Tips welcome.' },
   ];
 
+  const oldFiles = db.select({ storedName: t.files.storedName }).from(t.files).all();
   db.transaction((tx) => {
     for (const table of [t.posts, t.threads, t.groupInvites, t.groupMembers, t.groups, t.reviews, t.tutoringSessions, t.applicationHistory, t.applicationDocs, t.applications, t.authSessions, t.files, t.settings, t.users]) {
       tx.delete(table).run();
     }
     tx.run(sql`DELETE FROM sqlite_sequence`);
     for (let i = 0; i < userRows.length; i += 50) tx.insert(t.users).values(userRows.slice(i, i + 50)).run();
+    for (let i = 0; i < fileRows.length; i += 50) tx.insert(t.files).values(fileRows.slice(i, i + 50)).run();
     tx.insert(t.applications).values(appRows).run();
     tx.insert(t.applicationDocs).values(docRows).run();
     tx.insert(t.applicationHistory).values(histRows).run();
@@ -341,4 +368,7 @@ export async function seedDemo(db: Db, today = new Date()) {
     tx.insert(t.posts).values(postRows).run();
     tx.insert(t.settings).values({ id: 1, ...DEFAULT_SETTINGS }).run();
   });
+  mkdirSync(uploadsDir, { recursive: true });
+  for (const f of oldFiles) rmSync(join(uploadsDir, f.storedName), { force: true });
+  for (const [name, data] of fileData) writeFileSync(join(uploadsDir, name), data);
 }

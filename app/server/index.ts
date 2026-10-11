@@ -14,12 +14,13 @@ const port = Number(process.env.PORT ?? 3001);
 const demo = process.env.TTG_DEMO !== '0';
 
 const db = openDb(process.env.TTG_DB ?? join(dataDir, 'ttg.db'));
+const uploadsDir = process.env.TTG_UPLOADS ?? join(dataDir, 'uploads');
 if (demo && db.select({ n: count() }).from(users).get()!.n === 0) {
   console.log('Empty database: loading demo data…');
-  await seedDemo(db);
+  await seedDemo(db, uploadsDir);
 }
 
-const { app } = createApp({ db, uploadsDir: process.env.TTG_UPLOADS ?? join(dataDir, 'uploads'), demo });
+const { app } = createApp({ db, uploadsDir, demo });
 
 // In production the built web client is served from the same origin.
 const web = join(root, 'web', 'dist');

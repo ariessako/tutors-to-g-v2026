@@ -14,7 +14,7 @@ const PDF = Buffer.from('%PDF-1.4\n%test\n');
 beforeAll(async () => {
   uploads = mkdtempSync(join(tmpdir(), 'ttg-test-'));
   const db = openDb(':memory:');
-  await seedDemo(db);
+  await seedDemo(db, uploads);
   app = createApp({ db, uploadsDir: uploads, demo: true }).app;
 });
 afterAll(() => rmSync(uploads, { recursive: true, force: true }));
@@ -162,6 +162,28 @@ describe('booking and payment flow', () => {
 });
 
 describe('tutor application', () => {
+  it('seeds mock documents the tutor and admins can open, but other tutors cannot', async () => {
+    const paolo = await as('paolo.reyes@tutor.ph');
+    const docs = (await paolo.get('/api/me/application')).body.application.docs;
+    const prc = await paolo.get(`/api/files/${docs.prc.fileId}`);
+    expect(prc.status).toBe(200);
+    expect(prc.headers['content-type']).toBe('application/pdf');
+    expect(prc.body.toString('latin1')).toMatch(/^%PDF-1\.4[\s\S]*Paolo Reyes/);
+    const admin = await as('admin@tutorstogo.ph');
+    expect((await admin.get(`/api/files/${docs.tor.fileId}`)).status).toBe(200);
+    const jen = await as('jen@tutor.ph');
+    expect((await jen.get(`/api/files/${docs.prc.fileId}`)).status).toBe(404);
+  });
+
+  it('seeds a mock receipt for every uploaded payment', async () => {
+    const admin = await as('admin@tutorstogo.ph');
+    const pays = (await admin.get('/api/admin/payments')).body.payments as { receiptName: string | null; receiptFileId: string | null }[];
+    const withReceipt = pays.filter((p) => p.receiptName);
+    expect(withReceipt.length).toBeGreaterThan(0);
+    for (const p of withReceipt) expect(p.receiptFileId).toBeTruthy();
+    expect((await admin.get(`/api/files/${withReceipt[0].receiptFileId}`)).status).toBe(200);
+  });
+
   it('moves an applicant into the matching pool once approved', async () => {
     const jen = await as('jen@tutor.ph');
     const missing = await jen.post('/api/me/application').field('video', 'https://youtu.be/demo');
