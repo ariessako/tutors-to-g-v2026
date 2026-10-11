@@ -96,6 +96,8 @@ export const tutoringSessions = sqliteTable('tutoring_sessions', {
   learner: text('learner').notNull().default(''),
   guardian: text('guardian').notNull().default(''),
   status: text('status').$type<SessionStatus>().notNull().default('pending'),
+  /** Why the request was declined, when the system declined it rather than the tutor. */
+  declineReason: text('decline_reason'),
   amount: real('amount').notNull(),
   /** Star rating the student gave for this session, 0 when not rated yet. */
   rated: integer('rated').notNull().default(0),

@@ -237,7 +237,7 @@ export function sessionRoutes(ctx: Ctx) {
     const me = requireUser(req, 'teacher');
     const { accept } = z.object({ accept: z.boolean() }).parse(req.body);
     // Lock before checking conflicts so simultaneous confirmations cannot both succeed.
-    db.transaction((tx) => {
+    const autoDeclined = db.transaction((tx) => {
       const s = ownSession(me, req.params.id, 'tutorId');
       if (s.status !== 'pending') throw new HttpError(409, 'This request was already answered.');
       if (accept) {
@@ -245,8 +245,22 @@ export function sessionRoutes(ctx: Ctx) {
         if (message) throw new HttpError(409, message);
       }
       tx.update(tutoringSessions).set({ status: accept ? 'accepted' : 'declined' }).where(eq(tutoringSessions.id, s.id)).run();
+      if (!accept) return 0;
+      // A tutor teaches one class at a time, so other requests for the same time are declined.
+      const clashing = tx.select().from(tutoringSessions)
+        .where(and(eq(tutoringSessions.tutorId, s.tutorId), eq(tutoringSessions.status, 'pending'), ne(tutoringSessions.id, s.id)))
+        .all()
+        .filter((p) => overlaps(s, p))
+        .map((p) => p.id);
+      if (clashing.length) {
+        tx.update(tutoringSessions)
+          .set({ status: 'declined', declineReason: 'The tutor is already booked at this time.' })
+          .where(inArray(tutoringSessions.id, clashing))
+          .run();
+      }
+      return clashing.length;
     }, { behavior: 'immediate' });
-    res.json({ ok: true });
+    res.json({ ok: true, autoDeclined });
   });
 
   r.post('/sessions/:id/complete', (req, res) => {

@@ -65,6 +65,7 @@ export function sessionViews(db: Db, rows: SessionRow[]) {
     learner: r.learner || who(r.studentId).name,
     guardian: r.guardian,
     status: r.status,
+    declineReason: r.declineReason,
     amount: r.amount,
     rated: r.rated,
     payment: {

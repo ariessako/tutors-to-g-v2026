@@ -106,14 +106,37 @@ describe('instructor confirmation conflicts', () => {
   });
 
   it('does not reserve pending or declined intervals', async () => {
-    legacy('pending', 'pending');
+    legacy('pending', 'pending', 't1', 's1', 'Mon 09:00', 2);
     legacy('declined', 'declined');
     const student = await as('s2');
     const created = await student.post('/api/sessions').send(payload('t1', 'Mon 10:00'));
     const tutor = await as('t1');
     expect((await tutor.post(`/api/sessions/${created.body.id}/respond`).send({ accept: true })).status).toBe(200);
     expect((await tutor.post('/api/sessions/pending/respond').send({ accept: true })).status).toBe(409);
-    expect((await tutor.post('/api/sessions/pending/respond').send({ accept: false })).status).toBe(200);
+  });
+
+  it('declines the tutor’s other pending requests that overlap an accepted one', async () => {
+    const s1 = await as('s1');
+    const s2 = await as('s2');
+    const accepted = await s1.post('/api/sessions').send(payload('t1', 'Mon 09:00', 1.5));
+    const overlapping = await s2.post('/api/sessions').send(payload('t1', 'Mon 10:00'));
+    const sameTime = await s2.post('/api/sessions').send(payload('t1', 'Mon 09:00'));
+    const after = await s2.post('/api/sessions').send(payload('t1', 'Mon 11:00'));
+    const otherTutor = await s1.post('/api/sessions').send(payload('t2', 'Mon 12:00'));
+    const studentElsewhere = await s2.post('/api/sessions').send(payload('t2', 'Mon 09:00'));
+    const tutor = await as('t1');
+    const result = await tutor.post(`/api/sessions/${accepted.body.id}/respond`).send({ accept: true });
+    expect(result.status).toBe(200);
+    expect(result.body.autoDeclined).toBe(2);
+    const status = (id: string) => db.select().from(tutoringSessions).where(eq(tutoringSessions.id, id)).get()!;
+    expect(status(overlapping.body.id).status).toBe('declined');
+    expect(status(sameTime.body.id).status).toBe('declined');
+    for (const r of [after, otherTutor, studentElsewhere]) expect(status(r.body.id).status).toBe('pending');
+    const mine = (await s2.get('/api/sessions')).body.sessions.find((x: { id: string }) => x.id === overlapping.body.id);
+    expect(mine.declineReason).toBe('The tutor is already booked at this time.');
+    // Declining a request does not touch the others.
+    expect((await tutor.post(`/api/sessions/${after.body.id}/respond`).send({ accept: false })).body.autoDeclined).toBe(0);
+    expect(status(after.body.id).declineReason).toBeNull();
   });
 
   it('does not reopen a confirmed interval after early completion', async () => {
@@ -144,7 +167,8 @@ describe('instructor confirmation conflicts', () => {
         secondTutor.post(`/api/sessions/${requests[1].body.id}/respond`).send({ accept: true }),
       ]);
       expect(confirmations.map((r) => r.status).sort()).toEqual([200, 409]);
-      expect(db.select().from(tutoringSessions).all().map((s) => s.status).sort()).toEqual(['accepted', 'pending']);
+      // The losing request overlaps the winner, so for the same tutor it is declined automatically.
+      expect(db.select().from(tutoringSessions).all().map((s) => s.status).sort()).toEqual(['accepted', kind === 'tutor' ? 'declined' : 'pending']);
     } finally { secondDb.$client.close(); }
   });
 

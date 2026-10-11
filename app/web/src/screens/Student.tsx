@@ -447,6 +447,7 @@ export function StudentSessions() {
                 <div style={{ minWidth: 0 }}>
                   <div style={{ fontWeight: 600 }}>{r.subject}</div>
                   <div className="muted ellipsis" style={{ fontSize: 13 }}>{r.topic}</div>
+                  {r.declineReason && <div style={{ fontSize: 12, marginTop: 2, color: 'var(--t-bad-fg)' }}>{r.declineReason} Request another time.</div>}
                 </div>
                 <div style={{ fontWeight: 700 }}>{peso(r.amount)}</div>
                 <div className="row wrap" style={{ gap: 8, justifyContent: 'flex-end' }}>

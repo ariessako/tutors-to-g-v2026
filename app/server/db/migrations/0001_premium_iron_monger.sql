@@ -1,0 +1,1 @@
+ALTER TABLE `tutoring_sessions` ADD `decline_reason` text;

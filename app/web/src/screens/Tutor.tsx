@@ -305,7 +305,10 @@ export function TutorSessions() {
   const accept = async (x: SessionView) => {
     if (acceptance.busy) return;
     setAcceptingId(x.id);
-    if (await acceptance.run(() => api(`/sessions/${x.id}/respond`, { body: { accept: true } }))) toast(`Accepted. ${x.student.split(' ')[0]} can now pay and upload a receipt.`);
+    const r = await acceptance.run(() => api<{ autoDeclined: number }>(`/sessions/${x.id}/respond`, { body: { accept: true } }));
+    if (!r) return;
+    const n = r.autoDeclined;
+    toast(`Accepted. ${x.student.split(' ')[0]} can now pay and upload a receipt.${n ? ` ${n} overlapping request${n > 1 ? 's were' : ' was'} declined.` : ''}`);
   };
   const decline = (x: SessionView) =>
     setConfirm({
