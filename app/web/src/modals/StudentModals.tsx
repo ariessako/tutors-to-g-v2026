@@ -1,8 +1,9 @@
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router';
 import { fmtDate, fmtTime, hoursLabel, peso } from '../../../shared/format';
 import { PAYPAL_PAYEE, SESSION_HOURS, SESSION_MODES } from '../../../shared/vocab';
-import { api, useAction, useApi } from '../api';
+import { api, ApiError, useAction, useApi } from '../api';
 import type { SessionView } from '../types';
 import { ErrorBox, Field, Icon, Loading, Modal, Seg, useToast } from '../ui';
 
@@ -14,27 +15,41 @@ interface BookingInfo {
 }
 
 export function BookModal({ tutorId, onClose }: { tutorId: string; onClose: () => void }) {
-  const q = useApi<BookingInfo>(`/tutors/${tutorId}/booking`);
   const [hours, setHours] = useState<number>(1);
+  const [selectedSlot, setSelectedSlot] = useState('');
+  const path = `/tutors/${tutorId}/booking?hours=${hours}`;
+  const q = useQuery({ queryKey: [path], queryFn: () => api<BookingInfo>(path), placeholderData: (previous) => previous });
   const { run, error, setError, busy } = useAction();
   const toast = useToast();
   const nav = useNavigate();
   const b = q.data;
   const first = b?.tutor.name.split(' ')[0];
+  const loadingSlots = q.isFetching || q.isPlaceholderData;
+  const validSlot = !!b?.slots.some((o) => `${o.date}|${o.slot}` === selectedSlot);
+
+  useEffect(() => {
+    if (b && !q.isPlaceholderData && !validSlot) setSelectedSlot('');
+  }, [b, q.isPlaceholderData, validSlot]);
 
   async function submit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const fd = new FormData(e.currentTarget);
-    const slot = String(fd.get('slot') ?? '');
+    const slot = selectedSlot;
     const topic = String(fd.get('topic') ?? '').trim();
-    if (!slot) return setError('Choose a time slot.');
+    if (loadingSlots || q.error) return setError('Wait for the schedule to refresh and try again.');
+    if (!slot || !validSlot) return setError('Choose a time slot.');
     if (topic.length < 5) return setError('Tell the tutor what you want to work on.');
     const [date, sl] = slot.split('|');
-    const ok = await run(() =>
-      api('/sessions', {
-        body: { tutorId, subject: fd.get('subject'), date, slot: sl, hours, mode: fd.get('mode'), topic, learner: String(fd.get('learner') ?? ''), guardian: String(fd.get('guardian') ?? '') },
-      }),
-    );
+    const ok = await run(async () => {
+      try {
+        return await api('/sessions', {
+          body: { tutorId, subject: fd.get('subject'), date, slot: sl, hours, mode: fd.get('mode'), topic, learner: String(fd.get('learner') ?? ''), guardian: String(fd.get('guardian') ?? '') },
+        });
+      } catch (e) {
+        if (e instanceof ApiError && e.status === 409) await q.refetch();
+        throw e;
+      }
+    });
     if (!ok) return;
     onClose();
     nav('/sessions');
@@ -61,7 +76,7 @@ export function BookModal({ tutorId, onClose }: { tutorId: string; onClose: () =
             </Field>
           </div>
           <Field label={`Time slot from ${first}’s schedule`}>
-            <select className="input" name="slot" defaultValue="">
+            <select className="input" name="slot" value={validSlot ? selectedSlot : ''} onChange={(e) => setSelectedSlot(e.target.value)} disabled={loadingSlots || busy || !!q.error}>
               <option value="">Choose a slot</option>
               {b.slots.map((o) => (
                 <option key={o.date + o.slot} value={`${o.date}|${o.slot}`}>
@@ -70,7 +85,10 @@ export function BookModal({ tutorId, onClose }: { tutorId: string; onClose: () =
               ))}
             </select>
           </Field>
-          {!b.slots.length && <div style={{ fontSize: 13, color: 'var(--t-bad-fg)' }}>{first} has no open slots this week.</div>}
+          <div className="muted" style={{ fontSize: 13 }}>This is a request. Your tutor checks for scheduling conflicts before confirming.</div>
+          {loadingSlots && <div role="status" className="muted" style={{ fontSize: 13 }}>Loading the tutor’s schedule…</div>}
+          {!loadingSlots && !q.error && !b.slots.length && <div style={{ fontSize: 13, color: 'var(--t-bad-fg)' }}>{first} has no scheduled times this week.</div>}
+          {q.error && <ErrorBox error={q.error.message} />}
           <div className="field">
             <span className="label">Duration</span>
             <Seg label="Duration" value={hours} onChange={setHours} options={SESSION_HOURS.map((h) => ({ value: h, label: hoursLabel(h, true) }))} />
@@ -89,7 +107,7 @@ export function BookModal({ tutorId, onClose }: { tutorId: string; onClose: () =
           <ErrorBox error={error} />
           <div className="dialog-actions">
             <button type="button" className="btn btn-secondary" onClick={onClose}>Cancel</button>
-            <button type="submit" className="btn btn-primary" disabled={busy || !b.slots.length}>Send request</button>
+            <button type="submit" className="btn btn-primary" disabled={busy || loadingSlots || !!q.error || !validSlot}>Send request</button>
           </div>
         </form>
       )}

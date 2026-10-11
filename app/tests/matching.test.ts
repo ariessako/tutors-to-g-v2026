@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BLOCKS, DIM, DMAX, cluster, encode, kmeans, matchPct, matchesFor, validateProfile, type PersonInput } from '../shared/matching';
+import { BLOCKS, DIM, DMAX, cluster, elbow, encode, kmeans, matchPct, matchesFor, validateProfile, type PersonInput } from '../shared/matching';
 import type { Profile } from '../shared/types';
 
 const base: Profile = { hobbies: ['Basketball', 'Music', 'Drawing'], learning: 'Visual', social: 0.5, approach: 0.5, subjects: ['Math'], sched: ['Weekends'], grades: ['Junior High'] };
@@ -56,6 +56,23 @@ describe('cluster and matchesFor', () => {
     const cl = cluster(people, { k: 2, seed: 7, init: 'kmeans++', approach: 'tutor' });
     expect(cl.set.map((p) => p.id).sort()).toEqual(['t1', 't2']);
     expect(cl.assignOf.s1).toBe(cl.assignOf.t1);
+  });
+
+  it.each(['joint', 'tutor'] as const)('handles an empty dataset with %s clustering', (approach) => {
+    const settings = { k: 4, seed: 7, init: 'kmeans++' as const, approach };
+    const cl = cluster([], settings);
+    expect(cl.km.centroids).toEqual([]);
+    expect(cl.clusters).toEqual([]);
+    expect(cl.pca.project(encode(base))).toEqual([0, 0]);
+    expect(matchesFor(cl, 's1')).toBeNull();
+    expect(elbow([], settings).every((p) => p.wcss === 0)).toBe(true);
+  });
+
+  it.each(['joint', 'tutor'] as const)('returns no matches without tutors in %s mode', (approach) => {
+    const cl = cluster([people[0]], { k: 4, seed: 7, init: 'kmeans++', approach });
+    expect(matchesFor(cl, 's1')).toBeNull();
+    expect(cl.people[0].xy.every(Number.isFinite)).toBe(true);
+    if (approach === 'tutor') expect(cl.assignOf.s1).toBe(-1);
   });
 });
 

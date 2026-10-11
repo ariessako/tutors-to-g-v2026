@@ -408,7 +408,7 @@ export function ParentProgress() {
                     <div className="muted" style={{ fontSize: 12 }}>{t.completed} completed session{t.completed === 1 ? '' : 's'}</div>
                     {t.rated && <div style={{ fontSize: 12, color: 'var(--color-accent-700)' }}>You rated ★ {t.rated}</div>}
                   </div>
-                  <button className="btn btn-secondary btn-sm" onClick={() => setModal({ type: 'rate', tutorId: t.id, tutorName: t.name })}><Icon name="star" />Feedback</button>
+                  <button className="btn btn-secondary btn-sm" disabled={!!t.rated || !t.completed} onClick={() => setModal({ type: 'rate', tutorId: t.id, tutorName: t.name })}><Icon name="star" />{t.rated ? 'Reviewed' : !t.completed ? 'After a completed session' : 'Feedback'}</button>
                 </div>
               ))}
             </div>
