@@ -42,14 +42,14 @@ Environment variables: `PORT` (default 3001), `TTG_DATA` (data directory, defaul
 
 ## Roles
 
-- **Students** see their cluster and ranked matches, request sessions from a tutor's open weekly slots, pay by PayPal and upload the receipt, rate completed sessions (optionally anonymously) and join study groups.
+- **Students** see their cluster and ranked matches, request sessions from a tutor's open weekly slots, pay by uploading a receipt, rate completed sessions (optionally anonymously) and join study groups.
 - **Tutors** apply by uploading their PRC license, PSA birth certificate, transcript and a demo video link. Once an admin approves them they enter the matching pool and can manage requests, their weekly schedule, reviews and groups.
 - **Parents** link to their child's account at sign-up, follow the child's sessions and review the child's tutors.
 - **Admins** review applications, verify payment receipts, moderate reviews, manage the tutor store and accounts, and set the live matching model (k, seed, start method, joint or tutor-only clustering) from the K-means lab.
 
 ## Differences from the design
 
-- Payments stay manual, as in the design: the student pays through PayPal outside the app and uploads the receipt with its transaction ID. The design's simulated in-app "PayPal checkout" step is replaced by a link to PayPal, since the app doesn't process payments.
+- Payments stay manual: the student pays outside the app by any method and uploads the receipt, with an optional reference number, for an admin to approve. The design's PayPal checkout step is left out, since the app doesn't process payments.
 - In the K-means lab, other students appear as "Student 1", "Student 2" and so on for everyone except admins. Only admins' control changes update the live model; for everyone else the controls are a local preview. "Add a student" in the lab adds a hypothetical student to that page only and saves nothing.
 - Anonymous reviews never send the author to the browser unless the viewer is an admin.
 - When an admin adds a tutor directly, the app generates a temporary password and shows it once so the admin can pass it on.

@@ -36,7 +36,7 @@ export function AdminOverview() {
   const { counts: c, queue, model } = q.data;
   const tiles = [
     { n: c.applications, icon: 'identification-card', label: 'Applications to review', sub: 'PRC, PSA, TOR and demo video', to: '/admin/applications' },
-    { n: c.payments, icon: 'receipt', label: 'Payments to approve', sub: 'PayPal receipts uploaded by students', to: '/admin/payments' },
+    { n: c.payments, icon: 'receipt', label: 'Payments to approve', sub: 'Receipts uploaded by students', to: '/admin/payments' },
     { n: c.feedback, icon: 'chat-circle-text', label: 'Feedback to check', sub: 'New ratings of 3 stars or lower', to: '/admin/feedback' },
     { n: c.active, icon: 'users', label: 'Active accounts', sub: `${c.deactivated} deactivated`, to: '/admin/accounts' },
   ];
@@ -504,7 +504,7 @@ interface PaymentRow {
   date: string;
   amount: number;
   amountPaid: number | null;
-  txn: string | null;
+  reference: string | null;
   receiptName: string | null;
   receiptFileId: string | null;
   at: string | null;
@@ -539,7 +539,7 @@ export function AdminPayments() {
     });
   return (
     <section className="page" style={{ gap: 18 }}>
-      <PageHead title="Payments" sub="Match each receipt’s PayPal transaction ID and amount before approving. The tutor sees the session as paid once you approve." />
+      <PageHead title="Payments" sub="Check each receipt’s amount and reference number before approving. The tutor sees the session as paid once you approve." />
       <Seg
         label="Payment status"
         value={filter}
@@ -553,7 +553,7 @@ export function AdminPayments() {
         ) : (
           <div className="table-scroll">
             <table className="table hover">
-              <thead><tr><th>Student → tutor</th><th>Session</th><th>Due</th><th>PayPal transaction</th><th>Receipt</th><th>Status</th><th /></tr></thead>
+              <thead><tr><th>Student → tutor</th><th>Session</th><th>Due</th><th>Reference no.</th><th>Receipt</th><th>Status</th><th /></tr></thead>
               <tbody>
                 {list.map((p) => {
                   const short = p.amountPaid != null && p.amountPaid < p.amount;
@@ -566,7 +566,7 @@ export function AdminPayments() {
                         <div style={{ fontWeight: 700 }}>{peso(p.amount)}</div>
                         {short && <div className="row" style={{ gap: 4, fontSize: 12, color: 'var(--t-bad-fg)' }}><Icon name="warning" />Receipt shows {peso(p.amountPaid!)}</div>}
                       </td>
-                      <td style={{ fontFamily: 'ui-monospace, Menlo, monospace', fontSize: 12 }}>{p.txn ?? '—'}</td>
+                      <td style={{ fontFamily: 'ui-monospace, Menlo, monospace', fontSize: 12 }}>{p.reference ?? '—'}</td>
                       <td>
                         <button className="btn btn-secondary" style={{ height: 28, padding: '0 10px', fontSize: 12, borderRadius: 7, maxWidth: 180 }} onClick={() => openFile(p.receiptFileId, p.receiptName)}>
                           <Icon name="paperclip" /><span className="ellipsis">{p.receiptName ?? '—'}</span>

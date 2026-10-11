@@ -105,14 +105,14 @@ describe('booking and payment flow', () => {
     expect(dup.status).toBe(201);
 
     // Paying before the tutor accepts is refused.
-    const early = await bea.post(`/api/sessions/${req.body.id}/receipt`).field('txn', 'ABCDEFGH12').field('amount', '450').attach('receipt', PDF, { filename: 'r.pdf', contentType: 'application/pdf' });
+    const early = await bea.post(`/api/sessions/${req.body.id}/receipt`).field('amount', '450').attach('receipt', PDF, { filename: 'r.pdf', contentType: 'application/pdf' });
     expect(early.status).toBe(409);
 
     const paolo = await as('paolo.reyes@tutor.ph');
     expect((await paolo.post(`/api/sessions/${req.body.id}/respond`).send({ accept: true })).status).toBe(200);
     expect((await paolo.post(`/api/sessions/${dup.body.id}/respond`).send({ accept: true })).status).toBe(409);
 
-    const pay = await bea.post(`/api/sessions/${req.body.id}/receipt`).field('txn', 'ABCDEFGH12').field('amount', '450').attach('receipt', PDF, { filename: 'receipt.pdf', contentType: 'application/pdf' });
+    const pay = await bea.post(`/api/sessions/${req.body.id}/receipt`).field('amount', '450').attach('receipt', PDF, { filename: 'receipt.pdf', contentType: 'application/pdf' });
     expect(pay.status).toBe(200);
 
     const studentPending = await bea.get('/api/sessions');
@@ -120,7 +120,7 @@ describe('booking and payment flow', () => {
     expect(pending.payment.status).toBe('for_review');
     const tutorPending = await paolo.get('/api/sessions');
     expect(tutorPending.body.sessions.find((s: { id: string }) => s.id === req.body.id).payment.status).toBe('for_review');
-    const duplicateReceipt = await bea.post(`/api/sessions/${req.body.id}/receipt`).field('txn', 'ABCDEFGH12').field('amount', '450').attach('receipt', PDF, { filename: 'duplicate.pdf', contentType: 'application/pdf' });
+    const duplicateReceipt = await bea.post(`/api/sessions/${req.body.id}/receipt`).field('amount', '450').attach('receipt', PDF, { filename: 'duplicate.pdf', contentType: 'application/pdf' });
     expect(duplicateReceipt.status).toBe(409);
     expect((await bea.post(`/api/admin/payments/${req.body.id}`).send({ approve: true })).status).toBe(403);
 
@@ -128,6 +128,7 @@ describe('booking and payment flow', () => {
     const pays = await admin.get('/api/admin/payments');
     const row = pays.body.payments.find((p: { id: string }) => p.id === req.body.id);
     expect(row.status).toBe('for_review');
+    expect(row.reference).toBeNull();
     expect((await admin.get(`/api/files/${row.receiptFileId}`)).status).toBe(200);
     expect((await bea.get(`/api/files/${row.receiptFileId}`)).status).toBe(200);
     expect((await paolo.get(`/api/files/${row.receiptFileId}`)).status).toBe(404);
@@ -135,12 +136,12 @@ describe('booking and payment flow', () => {
     expect((await admin.post(`/api/admin/payments/${req.body.id}`).send({ approve: false })).status).toBe(200);
     const rejected = await bea.get('/api/sessions');
     expect(rejected.body.sessions.find((s: { id: string }) => s.id === req.body.id).payment.status).toBe('rejected');
-    const resubmit = await bea.post(`/api/sessions/${req.body.id}/receipt`).field('txn', 'CORRECTED123').field('amount', '450').attach('receipt', PDF, { filename: 'corrected.pdf', contentType: 'application/pdf' });
+    const resubmit = await bea.post(`/api/sessions/${req.body.id}/receipt`).field('reference', 'CORRECTED123').field('amount', '450').attach('receipt', PDF, { filename: 'corrected.pdf', contentType: 'application/pdf' });
     expect(resubmit.status).toBe(200);
     const updatedPays = await admin.get('/api/admin/payments');
     const updatedRow = updatedPays.body.payments.find((p: { id: string }) => p.id === req.body.id);
     expect(updatedRow.status).toBe('for_review');
-    expect(updatedRow.txn).toBe('CORRECTED123');
+    expect(updatedRow.reference).toBe('CORRECTED123');
     expect(updatedRow.receiptName).toBe('corrected.pdf');
     expect(updatedRow.receiptFileId).not.toBe(row.receiptFileId);
     expect((await admin.get(`/api/files/${updatedRow.receiptFileId}`)).status).toBe(200);
@@ -156,7 +157,7 @@ describe('booking and payment flow', () => {
   it('rejects non-PDF, non-image uploads', async () => {
     const bea = await as('bea@student.ph');
     const s = (await bea.get('/api/sessions')).body.sessions.find((x: { status: string; payment: { status: string } }) => x.status === 'accepted' && x.payment.status === 'unpaid');
-    const r = await bea.post(`/api/sessions/${s.id}/receipt`).field('txn', 'ABCDEFGH12').field('amount', '675').attach('receipt', Buffer.from('hi'), { filename: 'x.exe', contentType: 'application/x-msdownload' });
+    const r = await bea.post(`/api/sessions/${s.id}/receipt`).field('amount', '675').attach('receipt', Buffer.from('hi'), { filename: 'x.exe', contentType: 'application/x-msdownload' });
     expect(r.status).toBe(400);
   });
 });

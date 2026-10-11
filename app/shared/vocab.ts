@@ -36,5 +36,3 @@ export const DOC_KINDS = [
 ] as const;
 export type DocKind = (typeof DOC_KINDS)[number]['key'];
 
-/** Where students send PayPal payments. Shown in the pay dialog. */
-export const PAYPAL_PAYEE = 'payments@tutorstogo.ph';

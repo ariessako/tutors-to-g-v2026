@@ -101,7 +101,8 @@ export const tutoringSessions = sqliteTable('tutoring_sessions', {
   rated: integer('rated').notNull().default(0),
   createdAt: text('created_at').notNull(),
   paymentStatus: text('payment_status').$type<PaymentStatus>().notNull().default('unpaid'),
-  paymentTxn: text('payment_txn'),
+  /** Optional reference number from the receipt. */
+  paymentRef: text('payment_txn'),
   receiptName: text('receipt_name'),
   receiptFileId: text('receipt_file_id').references(() => files.id, { onDelete: 'set null' }),
   amountPaid: real('amount_paid'),

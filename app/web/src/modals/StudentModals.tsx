@@ -2,7 +2,7 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router';
 import { fmtDate, fmtTime, hoursLabel, peso } from '../../../shared/format';
-import { PAYPAL_PAYEE, SESSION_HOURS, SESSION_MODES } from '../../../shared/vocab';
+import { SESSION_HOURS, SESSION_MODES } from '../../../shared/vocab';
 import { api, ApiError, useAction, useApi } from '../api';
 import type { SessionView } from '../types';
 import { ErrorBox, Field, Icon, Loading, Modal, Seg, useToast } from '../ui';
@@ -116,28 +116,25 @@ export function BookModal({ tutorId, onClose }: { tutorId: string; onClose: () =
 }
 
 /**
- * Payment: the student pays through PayPal outside the app, then uploads the
- * receipt and transaction ID for an admin to verify.
+ * Payment: the student pays outside the app by any method, then uploads the
+ * receipt (with an optional reference number) for an admin to verify.
  */
 export function PayModal({ session: x, onClose }: { session: SessionView; onClose: () => void }) {
   const rejected = x.payment.status === 'rejected';
-  const [step, setStep] = useState<1 | 2>(rejected ? 2 : 1);
   const [file, setFile] = useState<File | null>(null);
   const { run, error, setError, busy } = useAction();
   const toast = useToast();
-  const ref = `TTG-${x.id.slice(-6).toUpperCase()}`;
 
   async function submit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const fd = new FormData(e.currentTarget);
-    const txn = String(fd.get('txn') ?? '').trim();
+    const reference = String(fd.get('reference') ?? '').trim();
     const amount = Number(fd.get('amount'));
-    if (!file) return setError('Attach your PayPal receipt.');
-    if (txn.length < 8) return setError('Enter the PayPal transaction ID from your receipt.');
+    if (!file) return setError('Attach your receipt.');
     if (!(amount > 0)) return setError('Enter the amount you paid.');
     const form = new FormData();
     form.set('receipt', file);
-    form.set('txn', txn);
+    form.set('reference', reference);
     form.set('amount', String(amount));
     if (!(await run(() => api(`/sessions/${x.id}/receipt`, { form })))) return;
     onClose();
@@ -146,58 +143,33 @@ export function PayModal({ session: x, onClose }: { session: SessionView; onClos
 
   return (
     <Modal onClose={onClose} label="Pay for your session">
-      {step === 1 ? (
-        <>
-          <div className="dialog-title">Pay for your session</div>
-          <dl style={{ display: 'grid', gridTemplateColumns: '120px minmax(0,1fr)', gap: '8px 16px', margin: 0, fontSize: 14 }}>
-            <dt className="muted">Tutor</dt><dd style={{ margin: 0 }}>{x.tutor}</dd>
-            <dt className="muted">Session</dt><dd style={{ margin: 0 }}>{x.subject} · {fmtDate(x.date)}, {fmtTime(x.time)}</dd>
-            <dt className="muted">Duration</dt><dd style={{ margin: 0 }}>{hoursLabel(x.hours, true)}</dd>
-            <dt className="muted">Pay to</dt><dd style={{ margin: 0 }}>{PAYPAL_PAYEE}</dd>
-            <dt className="muted">Reference</dt><dd style={{ margin: 0, fontFamily: 'ui-monospace, Menlo, monospace' }}>{ref}</dd>
-          </dl>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-            <span className="muted">Amount due</span>
-            <span className="head-font" style={{ fontSize: 34, fontWeight: 700 }}>{peso(x.amount)}</span>
-          </div>
-          <p className="muted" style={{ fontSize: 13 }}>
-            Send the amount to {PAYPAL_PAYEE} with the reference in the note. Tutors To Go holds the payment and releases it to your tutor after the session.
-          </p>
-          <div className="dialog-actions" style={{ justifyContent: 'space-between', flexWrap: 'wrap' }}>
-            <button className="btn btn-ghost" onClick={() => setStep(2)}>I already paid</button>
-            <div className="row">
-              <button className="btn btn-secondary" onClick={onClose}>Cancel</button>
-              <a className="btn btn-primary" href="https://www.paypal.com/myaccount/transfer/homepage/pay" target="_blank" rel="noopener noreferrer" onClick={() => setStep(2)}>
-                <Icon name="paypal-logo" />
-                Open PayPal
-              </a>
-            </div>
-          </div>
-        </>
-      ) : (
-        <form onSubmit={submit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-          <div className="dialog-title">Upload your receipt</div>
-          {rejected && <div className="alert alert-bad"><Icon name="warning-circle" />Your last receipt was rejected. Upload a clearer copy or check the amount.</div>}
-          <p className="dialog-body">An admin checks the receipt against PayPal before the session is marked paid.</p>
-          <Field label="Receipt (image or PDF, up to 10 MB)">
-            <input className="input" type="file" accept="image/*,.pdf" style={{ padding: 6, height: 'auto' }} onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
+      <form onSubmit={submit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+        <div className="dialog-title">Upload your receipt</div>
+        {rejected && <div className="alert alert-bad"><Icon name="warning-circle" />Your last receipt was rejected. Upload a clearer copy or check the amount.</div>}
+        <dl style={{ display: 'grid', gridTemplateColumns: '120px minmax(0,1fr)', gap: '8px 16px', margin: 0, fontSize: 14 }}>
+          <dt className="muted">Tutor</dt><dd style={{ margin: 0 }}>{x.tutor}</dd>
+          <dt className="muted">Session</dt><dd style={{ margin: 0 }}>{x.subject} · {fmtDate(x.date)}, {fmtTime(x.time)}</dd>
+          <dt className="muted">Duration</dt><dd style={{ margin: 0 }}>{hoursLabel(x.hours, true)}</dd>
+          <dt className="muted">Amount due</dt><dd style={{ margin: 0, fontWeight: 700 }}>{peso(x.amount)}</dd>
+        </dl>
+        <p className="dialog-body">Upload the receipt for your payment. An admin checks it before the session is marked paid.</p>
+        <Field label="Receipt (image or PDF, up to 10 MB)">
+          <input className="input" type="file" accept="image/*,.pdf" style={{ padding: 6, height: 'auto' }} onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
+        </Field>
+        <div className="stack-md" style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr', gap: 12 }}>
+          <Field label="Reference number (optional)">
+            <input className="input" name="reference" maxLength={40} style={{ fontFamily: 'ui-monospace, Menlo, monospace', fontSize: 13 }} autoComplete="off" />
           </Field>
-          <div className="stack-md" style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr', gap: 12 }}>
-            <Field label="PayPal transaction ID">
-              <input className="input" name="txn" style={{ fontFamily: 'ui-monospace, Menlo, monospace', fontSize: 13 }} autoComplete="off" />
-            </Field>
-            <Field label="Amount paid (₱)">
-              <input className="input" name="amount" type="number" min={1} step="any" defaultValue={x.amount} />
-            </Field>
-          </div>
-          <ErrorBox error={error} />
-          <div className="dialog-actions">
-            {!rejected && <button type="button" className="btn btn-ghost" onClick={() => setStep(1)} style={{ marginRight: 'auto' }}>Back</button>}
-            <button type="button" className="btn btn-secondary" onClick={onClose}>Cancel</button>
-            <button type="submit" className="btn btn-primary" disabled={busy}>Submit for approval</button>
-          </div>
-        </form>
-      )}
+          <Field label="Amount paid (₱)">
+            <input className="input" name="amount" type="number" min={1} step="any" defaultValue={x.amount} />
+          </Field>
+        </div>
+        <ErrorBox error={error} />
+        <div className="dialog-actions">
+          <button type="button" className="btn btn-secondary" onClick={onClose}>Cancel</button>
+          <button type="submit" className="btn btn-primary" disabled={busy}>Submit for approval</button>
+        </div>
+      </form>
     </Modal>
   );
 }

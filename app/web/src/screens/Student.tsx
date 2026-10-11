@@ -76,7 +76,7 @@ export function StudentHome({ me }: { me: Me }) {
               </div>
               {canPay(x) && (
                 <button className="btn btn-primary" onClick={() => setModal({ type: 'pay', session: x })}>
-                  <Icon name="paypal-logo" />Pay {peso(x.amount)}
+                  <Icon name="receipt" />Pay {peso(x.amount)}
                 </button>
               )}
             </div>
@@ -370,7 +370,7 @@ export function TutorProfile({ me }: { me: Me }) {
               <button className="btn btn-primary btn-lg" onClick={() => setModal({ type: 'book', tutorId: t.id })}><Icon name="calendar-plus" />Request a session</button>
             )}
             <div className="muted" style={{ display: 'flex', flexDirection: 'column', gap: 8, fontSize: 13 }}>
-              <span className="row" style={{ gap: 8 }}><Icon name="check-circle" style={{ color: 'var(--t-ok-fg)' }} />Pay with PayPal after {t.name.split(' ')[0]} accepts</span>
+              <span className="row" style={{ gap: 8 }}><Icon name="check-circle" style={{ color: 'var(--t-ok-fg)' }} />Pay and upload your receipt after {t.name.split(' ')[0]} accepts</span>
               <span className="row" style={{ gap: 8 }}><Icon name="shield-check" style={{ color: 'var(--t-ok-fg)' }} />Receipts verified by Tutors To Go</span>
             </div>
           </div>
@@ -426,7 +426,7 @@ export function StudentSessions() {
   const rows = all.filter((x) => x.status === tab);
   return (
     <section className="page">
-      <PageHead title="Sessions" sub="Pay once a tutor accepts. Upload your PayPal receipt and an admin confirms it." />
+      <PageHead title="Sessions" sub="Pay once a tutor accepts. Upload your receipt and an admin confirms it." />
       <Seg label="Session status" large value={tab} onChange={setTab} options={SESSION_TABS.map((t) => ({ value: t.k, label: `${t.title} · ${all.filter((x) => x.status === t.k).length}` }))} />
       <div className="card card-clip">
         {!rows.length && <div className="empty-inline"><Icon name="calendar-blank" />{cur.empty}</div>}
@@ -452,7 +452,7 @@ export function StudentSessions() {
                 <div className="row wrap" style={{ gap: 8, justifyContent: 'flex-end' }}>
                   <Tag tone={st.tone}>{st.label}</Tag>
                   {showPay && <PayTag x={r} />}
-                  {canPay(r) && <button className="btn btn-primary btn-sm" onClick={() => setModal({ type: 'pay', session: r })}><Icon name="paypal-logo" />Pay</button>}
+                  {canPay(r) && <button className="btn btn-primary btn-sm" onClick={() => setModal({ type: 'pay', session: r })}><Icon name="receipt" />Pay</button>}
                   {r.status === 'completed' && !r.rated && (
                     <button className="btn btn-secondary btn-sm" onClick={() => setModal({ type: 'rate', tutorId: r.tutorId, tutorName: r.tutor, sessionId: r.id })}><Icon name="star" />Rate</button>
                   )}

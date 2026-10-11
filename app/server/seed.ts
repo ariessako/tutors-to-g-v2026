@@ -273,7 +273,7 @@ export async function seedDemo(db: Db, uploadsDir: string, today = new Date()) {
     const row = { id: `ses${++sid}`, createdAt: stampAgo(14, 12), ...o };
     if (row.receiptName && row.receiptAt) {
       const lines = [`Paid by: ${byId(row.studentId).name}`, `Paid to: Tutors To Go`, `Amount: PHP ${(row.amountPaid ?? row.amount).toLocaleString('en-US')}`, `Date: ${row.receiptAt.slice(0, 10)}`];
-      if (row.paymentTxn) lines.push(`Reference no.: ${row.paymentTxn}`);
+      if (row.paymentRef) lines.push(`Reference no.: ${row.paymentRef}`);
       row.receiptFileId = mockFile(row.studentId, row.receiptName, row.receiptAt, 'Payment receipt', lines);
     }
     sessRows.push(row);
@@ -285,20 +285,20 @@ export async function seedDemo(db: Db, uploadsDir: string, today = new Date()) {
     return u.gradeLabel ? `${u.name}, ${u.gradeLabel}` : u.name;
   };
   ses({ studentId: 's_bea', tutorId: 't_paolo', subject: 'Math', date: upcoming('Tue 17:00'), slot: 'Tue 17:00', hours: 1.5, mode: 'Online (Google Meet)', topic: 'Quadratic equations: factoring and word problems', learner: 'Bea Santos, Grade 10', guardian: 'Liza Santos · 0917 555 0142', status: 'accepted', amount: 675 });
-  ses({ studentId: 's_bea', tutorId: 't_paolo', subject: 'Math', date: lastWeek('Tue 17:00'), slot: 'Tue 17:00', hours: 1.5, mode: 'Online (Google Meet)', topic: 'Systems of linear equations', learner: 'Bea Santos, Grade 10', status: 'completed', amount: 675, paymentStatus: 'paid', paymentTxn: '5TY20931KD448722N', receiptName: 'receipt-bank-transfer.pdf', amountPaid: 675, receiptAt: stampAgo(7, 19, 12), reviewedAt: stampAgo(6, 9) });
+  ses({ studentId: 's_bea', tutorId: 't_paolo', subject: 'Math', date: lastWeek('Tue 17:00'), slot: 'Tue 17:00', hours: 1.5, mode: 'Online (Google Meet)', topic: 'Systems of linear equations', learner: 'Bea Santos, Grade 10', status: 'completed', amount: 675, paymentStatus: 'paid', paymentRef: '5TY20931KD448722N', receiptName: 'receipt-bank-transfer.pdf', amountPaid: 675, receiptAt: stampAgo(7, 19, 12), reviewedAt: stampAgo(6, 9) });
   ses({ studentId: 's_bea', tutorId: sci.id, subject: 'Science', date: upcoming('Thu 18:00'), slot: 'Thu 18:00', hours: 1, mode: 'Online (Google Meet)', topic: 'Chemical reactions and balancing equations', learner: 'Bea Santos, Grade 10', status: 'pending', amount: sci.rate! });
-  ses({ studentId: 's_bea', tutorId: 't_paolo', subject: 'Science', date: upcoming('Sat 10:00'), slot: 'Sat 10:00', hours: 1, mode: 'In-person', topic: 'Electricity and circuits review', learner: 'Bea Santos, Grade 10', status: 'accepted', amount: 450, paymentStatus: 'for_review', paymentTxn: '8XK29341LM002144', receiptName: 'receipt-gcash.pdf', amountPaid: 450, receiptAt: stampAgo(1, 20, 5) });
+  ses({ studentId: 's_bea', tutorId: 't_paolo', subject: 'Science', date: upcoming('Sat 10:00'), slot: 'Sat 10:00', hours: 1, mode: 'In-person', topic: 'Electricity and circuits review', learner: 'Bea Santos, Grade 10', status: 'accepted', amount: 450, paymentStatus: 'for_review', paymentRef: '8XK29341LM002144', receiptName: 'receipt-gcash.pdf', amountPaid: 450, receiptAt: stampAgo(1, 20, 5) });
   ses({ studentId: 's3', tutorId: 't_paolo', subject: 'Math', date: upcoming('Wed 18:00'), slot: 'Wed 18:00', hours: 1, mode: 'Online (Google Meet)', topic: 'Review for 1st quarter exam: linear functions', learner: learner('s3'), guardian: 'Parent · 0998 555 0189', status: 'pending', amount: 450 });
-  ses({ studentId: 's11', tutorId: 't_paolo', subject: 'Science', date: upcoming('Mon 17:00'), slot: 'Mon 17:00', hours: 1, mode: 'Online (Google Meet)', topic: 'Genetics: Punnett squares', learner: byId('s11').name, status: 'accepted', amount: 450, paymentStatus: 'paid', paymentTxn: '3JW81123AB990012C', receiptName: 'receipt-s11.pdf', amountPaid: 450, receiptAt: stampAgo(2, 18, 30), reviewedAt: stampAgo(1, 10) });
+  ses({ studentId: 's11', tutorId: 't_paolo', subject: 'Science', date: upcoming('Mon 17:00'), slot: 'Mon 17:00', hours: 1, mode: 'Online (Google Meet)', topic: 'Genetics: Punnett squares', learner: byId('s11').name, status: 'accepted', amount: 450, paymentStatus: 'paid', paymentRef: '3JW81123AB990012C', receiptName: 'receipt-s11.pdf', amountPaid: 450, receiptAt: stampAgo(2, 18, 30), reviewedAt: stampAgo(1, 10) });
   const t3 = Tt[3];
-  ses({ studentId: 's5', tutorId: t3.id, subject: t3.profile!.subjects[0], date: upcoming(t3.slots![0]), slot: t3.slots![0], hours: 1, mode: 'Online (Google Meet)', topic: 'Essay structure', learner: byId('s5').name, status: 'accepted', amount: t3.rate!, paymentStatus: 'for_review', paymentTxn: '1AB44120XY778810P', receiptName: 'gcash-receipt.pdf', amountPaid: t3.rate! - 50, receiptAt: stampAgo(0, 8, 40) });
+  ses({ studentId: 's5', tutorId: t3.id, subject: t3.profile!.subjects[0], date: upcoming(t3.slots![0]), slot: t3.slots![0], hours: 1, mode: 'Online (Google Meet)', topic: 'Essay structure', learner: byId('s5').name, status: 'accepted', amount: t3.rate!, paymentStatus: 'for_review', paymentRef: '1AB44120XY778810P', receiptName: 'gcash-receipt.pdf', amountPaid: t3.rate! - 50, receiptAt: stampAgo(0, 8, 40) });
   const others = S.filter((x) => x.id !== 's_bea');
   for (let w = 1; w <= 8; w++) {
     const n = 2 + Math.floor(r() * 4);
     for (let j = 0; j < n; j++) {
       const st = pick(others);
       const hrs = pick([1, 1, 1.5, 2]);
-      ses({ studentId: st.id, tutorId: 't_paolo', subject: pick(['Math', 'Science']), date: dayAgo(w * 7 - Math.floor(r() * 6)), slot: pick(['Mon 17:00', 'Tue 18:00', 'Thu 17:00', 'Sat 10:00']), hours: hrs, mode: 'Online (Google Meet)', topic: pick(['Linear equations', 'Factoring polynomials', 'Cell structure', 'Forces and motion', 'Quarter exam review']), learner: st.name, status: 'completed', amount: 450 * hrs, rated: 5, paymentStatus: 'paid', paymentTxn: `${sid}PP${Math.floor(r() * 1e9)}`, receiptName: 'receipt.pdf', amountPaid: 450 * hrs, receiptAt: stampAgo(w * 7, 20), reviewedAt: stampAgo(w * 7 - 1, 9) });
+      ses({ studentId: st.id, tutorId: 't_paolo', subject: pick(['Math', 'Science']), date: dayAgo(w * 7 - Math.floor(r() * 6)), slot: pick(['Mon 17:00', 'Tue 18:00', 'Thu 17:00', 'Sat 10:00']), hours: hrs, mode: 'Online (Google Meet)', topic: pick(['Linear equations', 'Factoring polynomials', 'Cell structure', 'Forces and motion', 'Quarter exam review']), learner: st.name, status: 'completed', amount: 450 * hrs, rated: 5, paymentStatus: 'paid', paymentRef: `${sid}PP${Math.floor(r() * 1e9)}`, receiptName: 'receipt.pdf', amountPaid: 450 * hrs, receiptAt: stampAgo(w * 7, 20), reviewedAt: stampAgo(w * 7 - 1, 9) });
     }
   }
 

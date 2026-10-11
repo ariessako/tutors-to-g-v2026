@@ -218,7 +218,7 @@ export function adminRoutes(ctx: Ctx) {
         date: x.date,
         amount: x.amount,
         amountPaid: x.amountPaid,
-        txn: x.paymentTxn,
+        reference: x.paymentRef,
         receiptName: x.receiptName,
         receiptFileId: x.receiptFileId,
         at: x.receiptAt,

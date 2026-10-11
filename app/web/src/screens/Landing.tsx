@@ -13,7 +13,7 @@ interface Step1 { name: string; email: string; password: string; gradeLabel: str
 const FEATURES = [
   { icon: 'user-focus', title: 'Build your profile', text: 'Hobbies, learning style, personality, subjects, schedule.' },
   { icon: 'circles-three-plus', title: 'Get clustered', text: 'K-means places you with the tutors closest to your profile.' },
-  { icon: 'paypal-logo', title: 'Book and pay', text: 'Request a slot, pay with PayPal, rate your tutor after.' },
+  { icon: 'receipt', title: 'Book and pay', text: 'Request a slot, upload your payment receipt, rate your tutor after.' },
 ];
 
 export function Landing() {

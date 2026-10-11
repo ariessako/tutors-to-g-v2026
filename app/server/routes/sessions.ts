@@ -262,16 +262,16 @@ export function sessionRoutes(ctx: Ctx) {
     const s = ownSession(me, String(req.params.id), 'studentId');
     if (!['accepted', 'completed'].includes(s.status)) throw new HttpError(409, 'You can pay once the tutor accepts.');
     if (!['unpaid', 'rejected'].includes(s.paymentStatus)) throw new HttpError(409, 'A receipt for this session is already in.');
-    if (!req.file) throw new HttpError(400, 'Attach your PayPal receipt.');
+    if (!req.file) throw new HttpError(400, 'Attach your receipt.');
     const body = z
       .object({
-        txn: z.string().trim().min(8, 'Enter the PayPal transaction ID from your receipt.').max(40),
+        reference: z.string().trim().max(40, 'Keep the reference number under 40 characters.').default(''),
         amount: z.coerce.number().positive('Enter the amount you paid.'),
       })
       .parse(req.body);
     const fileId = saveFile(db, me.id, req.file);
     db.update(tutoringSessions)
-      .set({ paymentStatus: 'for_review', paymentTxn: body.txn, receiptFileId: fileId, receiptName: req.file.originalname, amountPaid: body.amount, receiptAt: nowIso(), reviewedAt: null })
+      .set({ paymentStatus: 'for_review', paymentRef: body.reference || null, receiptFileId: fileId, receiptName: req.file.originalname, amountPaid: body.amount, receiptAt: nowIso(), reviewedAt: null })
       .where(eq(tutoringSessions.id, s.id))
       .run();
     res.json({ ok: true });

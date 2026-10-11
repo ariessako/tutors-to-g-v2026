@@ -69,7 +69,7 @@ export function sessionViews(db: Db, rows: SessionRow[]) {
     rated: r.rated,
     payment: {
       status: r.paymentStatus,
-      txn: r.paymentTxn,
+      reference: r.paymentRef,
       receiptName: r.receiptName,
       receiptFileId: r.receiptFileId,
       amountPaid: r.amountPaid,

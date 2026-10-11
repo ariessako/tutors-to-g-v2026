@@ -305,7 +305,7 @@ export function TutorSessions() {
   const accept = async (x: SessionView) => {
     if (acceptance.busy) return;
     setAcceptingId(x.id);
-    if (await acceptance.run(() => api(`/sessions/${x.id}/respond`, { body: { accept: true } }))) toast(`Accepted. ${x.student.split(' ')[0]} can now pay through PayPal.`);
+    if (await acceptance.run(() => api(`/sessions/${x.id}/respond`, { body: { accept: true } }))) toast(`Accepted. ${x.student.split(' ')[0]} can now pay and upload a receipt.`);
   };
   const decline = (x: SessionView) =>
     setConfirm({
@@ -320,7 +320,7 @@ export function TutorSessions() {
 
   return (
     <section className="page" style={{ gap: 22 }}>
-      <PageHead title="Sessions" sub="Accept requests, then watch for the Paid tag once an admin confirms the student’s PayPal receipt." />
+      <PageHead title="Sessions" sub="Accept requests, then watch for the Paid tag once an admin confirms the student’s receipt." />
       <ErrorBox error={error} />
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
         <h3 style={{ fontSize: 19 }}>New requests <span className="muted" style={{ fontFamily: 'var(--font-body)', fontSize: 13, fontWeight: 600 }}>{reqs.length}</span></h3>
