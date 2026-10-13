@@ -6,7 +6,7 @@ import { HttpError, requireUser } from '../auth';
 import { saveFile, type Ctx } from '../context';
 import { nowIso } from '../services';
 import { reviewViews, sessionViews } from '../views';
-import { addDays, iso } from '../../shared/format';
+import { addDays, iso, sortSlots } from '../../shared/format';
 import { DOC_KINDS, SCHEDULE_HOURS, WEEK } from '../../shared/vocab';
 
 const VALID_SLOTS = new Set(WEEK.flatMap((d) => SCHEDULE_HOURS.map((h) => `${d} ${h}`)));
@@ -57,7 +57,7 @@ export function teacherRoutes(ctx: Ctx) {
   r.put('/me/slots', (req, res) => {
     const me = requireUser(req, 'teacher');
     const { slots } = z.object({ slots: z.array(z.string().refine((s) => VALID_SLOTS.has(s), 'Invalid time slot.')).max(WEEK.length * SCHEDULE_HOURS.length) }).parse(req.body);
-    db.update(users).set({ slots: [...new Set(slots)] }).where(eq(users.id, me.id)).run();
+    db.update(users).set({ slots: sortSlots(slots) }).where(eq(users.id, me.id)).run();
     res.json({ ok: true });
   });
 

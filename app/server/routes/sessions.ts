@@ -6,7 +6,7 @@ import { HttpError, requireUser, type User } from '../auth';
 import { saveFile, type Ctx } from '../context';
 import { childIdsOf, nowIso, uid } from '../services';
 import { reviewViews, sessionViews } from '../views';
-import { iso, nextDate } from '../../shared/format';
+import { iso, slotDate, sortSlots } from '../../shared/format';
 import { SESSION_HOURS, SESSION_MODES } from '../../shared/vocab';
 import type { ScoredTutor } from '../../shared/matching';
 
@@ -80,10 +80,22 @@ export function sessionRoutes(ctx: Ctx) {
     return null;
   }
 
-  function scheduledSlots(t: User) {
+  /**
+   * The tutor's open hours over the next seven days, soonest first. A slot is
+   * `taken` when a session of `hours` there would overlap one the tutor has
+   * already confirmed.
+   */
+  function scheduledSlots(t: User, hours = 1) {
+    const booked = db.select().from(tutoringSessions)
+      .where(and(eq(tutoringSessions.tutorId, t.id), inArray(tutoringSessions.status, ['accepted', 'completed'])))
+      .all();
     return (t.slots ?? [])
-      .map((slot) => ({ date: iso(nextDate(slot.split(' ')[0])), slot }))
-      .sort((a, b) => (a.date + a.slot.split(' ')[1] < b.date + b.slot.split(' ')[1] ? -1 : 1));
+      .map((slot) => ({ at: slotDate(slot), slot }))
+      .sort((a, b) => a.at.getTime() - b.at.getTime())
+      .map(({ at, slot }) => {
+        const date = iso(at);
+        return { date, slot, taken: booked.some((s) => overlaps({ tutorId: t.id, studentId: '', date, slot, hours }, s)) };
+      });
   }
 
   r.get('/student/home', (req, res) => {
@@ -161,7 +173,7 @@ export function sessionRoutes(ctx: Ctx) {
         curricula: t.curricula ?? [],
         method: t.method ?? '',
         profile: t.profile!,
-        slots: t.slots ?? [],
+        slots: sortSlots(t.slots ?? []),
       },
       stats,
       reviews: reviewViews(db, visible, me.role === 'admin'),
@@ -171,7 +183,7 @@ export function sessionRoutes(ctx: Ctx) {
 
   r.get('/tutors/:id/booking', (req, res) => {
     const me = requireUser(req, 'student');
-    hoursSchema.parse(req.query.hours === undefined ? 1 : z.coerce.number().parse(req.query.hours));
+    const hours = hoursSchema.parse(req.query.hours === undefined ? 1 : z.coerce.number().parse(req.query.hours));
     const t = approvedTutor(req.params.id);
     if (!t) throw new HttpError(404, 'This tutor isn’t available.');
     const mySubjects = me.profile?.subjects ?? [];
@@ -179,7 +191,7 @@ export function sessionRoutes(ctx: Ctx) {
     res.json({
       tutor: { id: t.id, name: t.name, rate: t.rate ?? 0 },
       subjects,
-      slots: scheduledSlots(t),
+      slots: scheduledSlots(t, hours),
       learner: me.name + (me.gradeLabel ? `, ${me.gradeLabel}` : ''),
     });
   });
@@ -199,12 +211,14 @@ export function sessionRoutes(ctx: Ctx) {
         guardian: z.string().trim().max(160).default(''),
       })
       .parse(req.body);
-    // Requests may overlap; the instructor reserves the interval when accepting.
+    // Requests may overlap each other; the tutor reserves the interval when accepting.
     const id = db.transaction((tx) => {
       const t = approvedTutor(d.tutorId);
       if (!t) throw new HttpError(404, 'This tutor isn’t available.');
       if (!t.profile!.subjects.includes(d.subject)) throw new HttpError(400, `${t.name} doesn’t teach ${d.subject}.`);
-      if (!scheduledSlots(t).some((o) => o.date === d.date && o.slot === d.slot)) throw new HttpError(409, 'That slot is no longer on the tutor’s schedule. Choose another one.');
+      const open = scheduledSlots(t, d.hours).find((o) => o.date === d.date && o.slot === d.slot);
+      if (!open) throw new HttpError(409, 'That slot is no longer on the tutor’s schedule. Choose another one.');
+      if (open.taken) throw new HttpError(409, `${t.name} is already booked then. Choose another slot.`);
       const id = uid('ses_');
       tx.insert(tutoringSessions)
         .values({ id, studentId: me.id, tutorId: t.id, subject: d.subject, date: d.date, slot: d.slot, hours: d.hours, mode: d.mode, topic: d.topic, learner: d.learner, guardian: d.guardian, status: 'pending', amount: (t.rate ?? 0) * d.hours, createdAt: nowIso() })

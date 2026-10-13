@@ -10,7 +10,7 @@ import { ErrorBox, Field, Icon, Loading, Modal, Seg, useToast } from '../ui';
 interface BookingInfo {
   tutor: { id: string; name: string; rate: number };
   subjects: string[];
-  slots: { date: string; slot: string }[];
+  slots: { date: string; slot: string; taken: boolean }[];
   learner: string;
 }
 
@@ -25,7 +25,7 @@ export function BookModal({ tutorId, onClose }: { tutorId: string; onClose: () =
   const b = q.data;
   const first = b?.tutor.name.split(' ')[0];
   const loadingSlots = q.isFetching || q.isPlaceholderData;
-  const validSlot = !!b?.slots.some((o) => `${o.date}|${o.slot}` === selectedSlot);
+  const validSlot = !!b?.slots.some((o) => !o.taken && `${o.date}|${o.slot}` === selectedSlot);
 
   useEffect(() => {
     if (b && !q.isPlaceholderData && !validSlot) setSelectedSlot('');
@@ -79,15 +79,15 @@ export function BookModal({ tutorId, onClose }: { tutorId: string; onClose: () =
             <select className="input" name="slot" value={validSlot ? selectedSlot : ''} onChange={(e) => setSelectedSlot(e.target.value)} disabled={loadingSlots || busy || !!q.error}>
               <option value="">Choose a slot</option>
               {b.slots.map((o) => (
-                <option key={o.date + o.slot} value={`${o.date}|${o.slot}`}>
-                  {fmtDate(o.date)} · {fmtTime(o.slot.split(' ')[1])}
+                <option key={o.date + o.slot} value={`${o.date}|${o.slot}`} disabled={o.taken}>
+                  {fmtDate(o.date)} · {fmtTime(o.slot.split(' ')[1])}{o.taken ? ' · booked' : ''}
                 </option>
               ))}
             </select>
           </Field>
           <div className="muted" style={{ fontSize: 13 }}>This is a request. Your tutor checks for scheduling conflicts before confirming.</div>
           {loadingSlots && <div role="status" className="muted" style={{ fontSize: 13 }}>Loading the tutor’s schedule…</div>}
-          {!loadingSlots && !q.error && !b.slots.length && <div style={{ fontSize: 13, color: 'var(--t-bad-fg)' }}>{first} has no scheduled times this week.</div>}
+          {!loadingSlots && !q.error && !b.slots.some((o) => !o.taken) && <div style={{ fontSize: 13, color: 'var(--t-bad-fg)' }}>{first} has no open times in the next 7 days{b.slots.length ? ' for this duration' : ''}.</div>}
           {q.error && <ErrorBox error={q.error.message} />}
           <div className="field">
             <span className="label">Duration</span>

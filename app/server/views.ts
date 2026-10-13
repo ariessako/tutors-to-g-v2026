@@ -4,6 +4,7 @@ import type { Db } from './db';
 import { applications, reviews, tutoringSessions, users } from './db/schema';
 import type { User } from './auth';
 import type { Me } from '../shared/types';
+import { sortSlots } from '../shared/format';
 
 type SessionRow = typeof tutoringSessions.$inferSelect;
 type ReviewRow = typeof reviews.$inferSelect;
@@ -20,7 +21,7 @@ export function meDto(db: Db, u: User): Me {
       curricula: u.curricula ?? [],
       method: u.method ?? '',
       bio: u.bio ?? '',
-      slots: u.slots ?? [],
+      slots: sortSlots(u.slots ?? []),
       appStatus: app?.status ?? 'draft',
     };
   }

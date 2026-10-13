@@ -8,14 +8,14 @@ import { createApp } from '../server/app';
 import { hashPassword } from '../server/auth';
 import { openDb } from '../server/db';
 import { applications, tutoringSessions, users } from '../server/db/schema';
-import { iso, nextDate } from '../shared/format';
+import { iso, slotDate } from '../shared/format';
 import type { SessionStatus } from '../shared/types';
 
 let db: ReturnType<typeof openDb>;
 let app: ReturnType<typeof createApp>['app'];
 let dir: string;
 let passwordHash: string;
-const date = () => iso(nextDate('Mon'));
+const date = (slot = 'Mon 09:00') => iso(slotDate(slot));
 const profile = { hobbies: ['Coding', 'Anime', 'Music'], learning: 'Visual', social: 0.3, approach: 0.8, subjects: ['Math'], sched: ['Weekends'], grades: ['Senior High'] };
 
 beforeAll(async () => { passwordHash = await hashPassword('test123'); });
@@ -38,13 +38,13 @@ async function as(id: string, target = app) {
   expect((await agent.post('/api/auth/login').send({ email: `${id}@example.test`, password: 'test123' })).status).toBe(200);
   return agent;
 }
-const payload = (tutorId = 't1', slot = 'Mon 09:00', hours = 1, onDate = date()) => ({ tutorId, slot, hours, date: onDate, subject: 'Math', mode: 'In-person', topic: 'Practice algebra' });
+const payload = (tutorId = 't1', slot = 'Mon 09:00', hours = 1, onDate = date(slot)) => ({ tutorId, slot, hours, date: onDate, subject: 'Math', mode: 'In-person', topic: 'Practice algebra' });
 function legacy(id: string, status: SessionStatus, tutorId = 't1', studentId = 's1', slot = 'Mon 09:00', hours = 2) {
-  db.insert(tutoringSessions).values({ id, status, tutorId, studentId, slot, hours, date: date(), subject: 'Math', mode: 'In-person', topic: 'Existing lesson', amount: 400 * hours, createdAt: new Date().toISOString() }).run();
+  db.insert(tutoringSessions).values({ id, status, tutorId, studentId, slot, hours, date: date(slot), subject: 'Math', mode: 'In-person', topic: 'Existing lesson', amount: 400 * hours, createdAt: new Date().toISOString() }).run();
 }
 
 describe('instructor confirmation conflicts', () => {
-  it.each(['pending', 'accepted', 'completed', 'declined'] as const)('allows requests and shows scheduled slots despite %s sessions', async (status) => {
+  it.each(['pending', 'declined'] as const)('allows requests and shows scheduled slots despite %s sessions', async (status) => {
     legacy('existing', status);
     for (const [studentId, tutorId] of [['s2', 't1'], ['s1', 't2']]) {
       const student = await as(studentId);
@@ -58,16 +58,33 @@ describe('instructor confirmation conflicts', () => {
     }
   });
 
-  it.each(['accepted', 'completed'] as const)('rejects confirmation overlapping a tutor’s %s session', async (status) => {
+  it.each(['accepted', 'completed'] as const)('shows a tutor’s %s session as booked and refuses requests for it', async (status) => {
     legacy('existing', status);
     const student = await as('s2');
-    const created = await student.post('/api/sessions').send(payload('t1', 'Mon 10:00'));
-    expect(created.status).toBe(201);
+    for (const hours of [1, 1.5, 2]) {
+      const listing = (await student.get(`/api/tutors/t1/booking?hours=${hours}`)).body.slots as { slot: string; taken: boolean }[];
+      const taken = (slot: string) => listing.find((o) => o.slot === slot)!.taken;
+      expect(taken('Mon 09:00')).toBe(true);
+      expect(taken('Mon 10:00')).toBe(true);
+      expect(taken('Mon 11:00')).toBe(false);
+      // A longer session starting before the booking runs into it.
+      expect(taken('Mon 08:00')).toBe(hours > 1);
+    }
+    const result = await student.post('/api/sessions').send(payload('t1', 'Mon 10:00'));
+    expect(result.status).toBe(409);
+    expect(result.body.error).toMatch(/already booked/);
+    // Another tutor at the same time is still open.
+    expect((await student.post('/api/sessions').send(payload('t2', 'Mon 10:00'))).status).toBe(201);
+  });
+
+  it.each(['accepted', 'completed'] as const)('rejects confirmation overlapping a tutor’s %s session', async (status) => {
+    legacy('existing', status);
+    legacy('request', 'pending', 't1', 's2', 'Mon 10:00', 1);
     const tutor = await as('t1');
-    const result = await tutor.post(`/api/sessions/${created.body.id}/respond`).send({ accept: true });
+    const result = await tutor.post('/api/sessions/request/respond').send({ accept: true });
     expect(result.status).toBe(409);
     expect(result.body.error).toMatch(/Cannot confirm.*you already have another session/);
-    expect(db.select().from(tutoringSessions).where(eq(tutoringSessions.id, created.body.id)).get()!.status).toBe('pending');
+    expect(db.select().from(tutoringSessions).where(eq(tutoringSessions.id, 'request')).get()!.status).toBe('pending');
   });
 
   it('checks longer intervals starting before an existing session, including half-hours', async () => {
@@ -75,9 +92,9 @@ describe('instructor confirmation conflicts', () => {
     const student = await as('s1');
     const tutor = await as('t1');
     for (const hours of [1.5, 2]) {
-      const created = await student.post('/api/sessions').send(payload('t1', 'Mon 09:00', hours));
-      expect(created.status).toBe(201);
-      expect((await tutor.post(`/api/sessions/${created.body.id}/respond`).send({ accept: true })).status).toBe(409);
+      expect((await student.post('/api/sessions').send(payload('t1', 'Mon 09:00', hours))).status).toBe(409);
+      legacy(`long${hours}`, 'pending', 't1', 's1', 'Mon 09:00', hours);
+      expect((await tutor.post(`/api/sessions/long${hours}/respond`).send({ accept: true })).status).toBe(409);
     }
     const adjacent = await student.post('/api/sessions').send(payload());
     expect((await tutor.post(`/api/sessions/${adjacent.body.id}/respond`).send({ accept: true })).status).toBe(200);
@@ -98,7 +115,7 @@ describe('instructor confirmation conflicts', () => {
     legacy('existing', 'accepted');
     const student = await as('s1');
     const tutor = await as('t1');
-    for (const data of [payload('t1', 'Mon 11:00'), payload('t1', 'Tue 09:00', 2, iso(nextDate('Tue')))]) {
+    for (const data of [payload('t1', 'Mon 11:00'), payload('t1', 'Tue 09:00', 2)]) {
       const created = await student.post('/api/sessions').send(data);
       expect(created.status).toBe(201);
       expect((await tutor.post(`/api/sessions/${created.body.id}/respond`).send({ accept: true })).status).toBe(200);
@@ -144,9 +161,9 @@ describe('instructor confirmation conflicts', () => {
     const tutor = await as('t1');
     expect((await tutor.post('/api/sessions/existing/complete')).status).toBe(200);
     const student = await as('s2');
-    const created = await student.post('/api/sessions').send(payload());
-    expect(created.status).toBe(201);
-    expect((await tutor.post(`/api/sessions/${created.body.id}/respond`).send({ accept: true })).status).toBe(409);
+    expect((await student.post('/api/sessions').send(payload())).status).toBe(409);
+    legacy('request', 'pending', 't1', 's2', 'Mon 09:00', 1);
+    expect((await tutor.post('/api/sessions/request/respond').send({ accept: true })).status).toBe(409);
   });
 
   it.each(['tutor', 'student'] as const)('allows competing requests but only one confirmation for a %s conflict across database connections', async (kind) => {
@@ -179,5 +196,35 @@ describe('instructor confirmation conflicts', () => {
     expect((await student.post('/api/sessions').send(payload('t1', 'Mon 09:00', 3))).status).toBe(400);
     expect((await student.post('/api/sessions').send(payload('t1', 'Mon 15:00'))).status).toBe(409);
     expect((await student.post('/api/sessions').send(payload('t1', 'Mon 09:00', 1, '2000-01-03'))).status).toBe(409);
+  });
+});
+
+describe('tutor availability', () => {
+  it('shows saved hours to students in schedule order, whatever order they were picked in', async () => {
+    const tutor = await as('t1');
+    const picked = ['Sat 10:00', 'Mon 17:00', 'Mon 09:00', 'Sun 08:00', 'Mon 17:00', 'Wed 13:00'];
+    expect((await tutor.put('/api/me/slots').send({ slots: picked })).status).toBe(200);
+    const sorted = ['Mon 09:00', 'Mon 17:00', 'Wed 13:00', 'Sat 10:00', 'Sun 08:00'];
+    expect((await tutor.get('/api/auth/me')).body.me.tutor.slots).toEqual(sorted);
+    const student = await as('s1');
+    expect((await student.get('/api/tutors/t1')).body.tutor.slots).toEqual(sorted);
+    const booking = (await student.get('/api/tutors/t1/booking')).body.slots as { date: string; slot: string }[];
+    expect(booking.map((o) => o.slot).sort()).toEqual([...sorted].sort());
+    const times = booking.map((o) => `${o.date} ${o.slot.split(' ')[1]}`);
+    expect(times).toEqual([...times].sort());
+  });
+});
+
+describe('slotDate', () => {
+  // Wednesday, Oct 14 2026, 08:30 local time.
+  const now = new Date(2026, 9, 14, 8, 30);
+  it.each([
+    ['Wed 18:00', '2026-10-14'],
+    ['Wed 08:00', '2026-10-21'],
+    ['Thu 09:00', '2026-10-15'],
+    ['Tue 17:00', '2026-10-20'],
+    ['Sun 08:00', '2026-10-18'],
+  ])('puts %s on %s', (slot, expected) => {
+    expect(iso(slotDate(slot, now))).toBe(expected);
   });
 });

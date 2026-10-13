@@ -1,5 +1,5 @@
 /** Date, money and display helpers shared by server and client. */
-import { DAYS } from './vocab';
+import { DAYS, WEEK } from './vocab';
 
 /** YYYY-MM-DD in local time. */
 export const iso = (d: Date) =>
@@ -24,6 +24,25 @@ export function nextDate(day: string, from: Date = new Date()) {
     if (d.getDay() === target) return d;
   }
   return from;
+}
+
+/** Weekly slots ("Tue 17:00") in schedule order: Monday first, then by time. */
+export const sortSlots = (slots: readonly string[]) => {
+  const key = (s: string) => WEEK.indexOf(s.split(' ')[0] as (typeof WEEK)[number]) * 10000 + Number(s.split(' ')[1].replace(':', ''));
+  return [...new Set(slots)].sort((a, b) => key(a) - key(b));
+};
+
+/**
+ * The next time a weekly slot happens: today if its start time hasn't passed
+ * yet, otherwise within the next six days.
+ */
+export function slotDate(slot: string, now: Date = new Date()) {
+  const [day, time] = slot.split(' ');
+  const [h, m] = time.split(':').map(Number);
+  const target = DAYS.indexOf(day as (typeof DAYS)[number]);
+  const d = addDays(now, (target - now.getDay() + 7) % 7);
+  d.setHours(h, m, 0, 0);
+  return d <= now ? addDays(d, 7) : d;
 }
 
 /** "Tue, Sep 29" */
