@@ -295,6 +295,8 @@ export function TutorSessions() {
   const q = useApi<{ sessions: SessionView[] }>('/sessions');
   const [confirm, setConfirm] = useState<ConfirmSpec | null>(null);
   const [acceptingId, setAcceptingId] = useState<string | null>(null);
+  const [completing, setCompleting] = useState<SessionView | null>(null);
+  const [details, setDetails] = useState<SessionView | null>(null);
   const acceptance = useAction();
   const { run, error } = useAction();
   const toast = useToast();
@@ -319,8 +321,6 @@ export function TutorSessions() {
       yes: 'Decline request',
       action: attempt(() => api(`/sessions/${x.id}/respond`, { body: { accept: false } }), () => toast('Request declined.')),
     });
-  const [completing, setCompleting] = useState<SessionView | null>(null);
-  const [details, setDetails] = useState<SessionView | null>(null);
   const complete = (x: SessionView) => setCompleting(x);
 
   return (
