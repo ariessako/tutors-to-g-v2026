@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, NavLink, Outlet, useLocation } from 'react-router';
 import type { Me } from '../../shared/types';
-import { api } from './api';
+import { api, useApi } from './api';
 import { ROLE_LABEL } from './labels';
 import { Avatar, Icon, useTheme } from './ui';
 
@@ -89,6 +89,7 @@ export function Shell({ me }: { me: Me }) {
   }
 
   const hasProfile = me.role === 'student' || me.role === 'teacher';
+  const warned = useApi<{ limit: number; active: number }>(me.role === 'admin' ? null : '/me/warnings').data;
   const items = navFor(me);
   return (
     <>
@@ -136,6 +137,12 @@ export function Shell({ me }: { me: Me }) {
                     My profile
                   </Link>
                 )}
+                {me.role !== 'admin' && (
+                  <Link to="/warnings" className="menu-item" role="menuitem">
+                    <Icon name="warning" />
+                    My warnings{warned?.active ? ` (${warned.active})` : ''}
+                  </Link>
+                )}
                 <button className="menu-item" role="menuitem" onClick={theme.toggle}>
                   <Icon name={theme.icon} />
                   {theme.label}
@@ -150,6 +157,15 @@ export function Shell({ me }: { me: Me }) {
         </div>
       </header>
       <main id="main" className="main">
+        {!!warned?.active && loc.pathname !== '/warnings' && (
+          <div className="alert alert-warn" style={{ marginBottom: 16 }}>
+            <Icon name="warning" />
+            <span>
+              You have <strong>{warned.active} of {warned.limit}</strong> warnings. At {warned.limit} your account is banned.{' '}
+              <Link to="/warnings" className="link">See why</Link>
+            </span>
+          </div>
+        )}
         <Outlet />
       </main>
     </>

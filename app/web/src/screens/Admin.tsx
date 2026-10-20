@@ -2,6 +2,7 @@ import { useState, type FormEvent } from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
 import type { AppStatus, PaymentStatus, Profile, TutorDetails } from '../../../shared/types';
 import { validateProfile } from '../../../shared/matching';
+import { WARNING_LIMIT } from '../../../shared/vocab';
 import { fmtDate, fmtStamp, fmtTime, peso, stars } from '../../../shared/format';
 import { api, useAction, useApi } from '../api';
 import { APPLICATION, LINK, PAYMENT, REVIEW, SESSION, type LinkView } from '../labels';
@@ -21,7 +22,7 @@ function useOpenFile() {
 }
 
 interface Overview {
-  counts: { applications: number; payments: number; feedback: number; parentLinks: number; active: number; deactivated: number };
+  counts: { applications: number; payments: number; feedback: number; parentLinks: number; warningsSent: number; warningsActive: number; banned: number; active: number; deactivated: number };
   queue: {
     apps: { id: string; name: string; subjects: string[] }[];
     payments: { id: string; student: string; amount: number; file: string | null }[];
@@ -40,7 +41,8 @@ export function AdminOverview() {
     { n: c.payments, icon: 'receipt', label: 'Payments to approve', sub: 'Receipts uploaded by students', to: '/admin/payments' },
     { n: c.feedback, icon: 'chat-circle-text', label: 'Feedback to check', sub: 'New ratings of 3 stars or lower', to: '/admin/feedback' },
     { n: c.parentLinks, icon: 'link', label: 'Parent links to verify', sub: 'Confirmed by the student', to: '/admin/parent-links' },
-    { n: c.active, icon: 'users', label: 'Active accounts', sub: `${c.deactivated} deactivated`, to: '/admin/accounts' },
+    { n: c.active, icon: 'users', label: 'Active accounts', sub: `${c.deactivated} inactive · ${c.banned} banned`, to: '/admin/accounts' },
+    { n: c.warningsSent, icon: 'warning', label: 'Warnings sent', sub: `${c.warningsActive} still active`, to: '/admin/accounts' },
   ];
   const today = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
   return (
@@ -445,7 +447,79 @@ function TutorFormModal({ tutor, onClose }: { tutor: TutorRow | null; onClose: (
   );
 }
 
-interface AccountRow { id: string; name: string; email: string; role: 'student' | 'teacher' | 'parent'; joined: string; status: 'active' | 'deactivated' }
+interface AccountRow { id: string; name: string; email: string; role: 'student' | 'teacher' | 'parent'; joined: string; status: 'active' | 'deactivated' | 'banned'; warnings: number }
+const ACCOUNT_STATUS = { active: { label: 'Active', tone: 'ok' }, deactivated: { label: 'Deactivated', tone: 'bad' }, banned: { label: 'Banned', tone: 'bad' } } as const;
+
+interface WarningHistory {
+  limit: number;
+  status: AccountRow['status'];
+  active: number;
+  warnings: { id: string; reason: string; at: string; active: boolean; removedAt: string | null; issuedBy: string | null; removedBy: string | null }[];
+}
+
+/** A user's warning history, with the form to issue another. */
+function WarningsModal({ user: u, onClose }: { user: AccountRow; onClose: () => void }) {
+  const q = useApi<WarningHistory>(`/admin/users/${u.id}/warnings`);
+  const { run, error, setError, busy } = useAction();
+  const [formKey, setFormKey] = useState(0);
+  const toast = useToast();
+  const h = q.data;
+  async function issue(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const reason = String(new FormData(e.currentTarget).get('reason') ?? '').trim();
+    if (reason.length < 5) return setError('Say why you’re warning this user.');
+    const r = await run(() => api<{ count: number; banned: boolean; limit: number }>(`/admin/users/${u.id}/warnings`, { body: { reason } }));
+    if (!r) return;
+    setFormKey(formKey + 1);
+    toast(r.banned ? `${u.name} reached ${r.limit} warnings and is now banned.` : `Warning ${r.count} of ${r.limit} sent to ${u.name}.`);
+  }
+  const remove = async (id: string) => {
+    if (await run(() => api(`/admin/warnings/${id}/remove`, { method: 'POST' }))) toast('Warning removed.');
+  };
+  const next = (h?.active ?? 0) + 1;
+  return (
+    <Modal onClose={onClose} width={580} label={`Warnings for ${u.name}`}>
+      <div className="dialog-title">Warnings for {u.name}</div>
+      {!h ? (
+        q.error ? <ErrorBox error={q.error.message} /> : <Loading />
+      ) : (
+        <>
+          <div className="row wrap" style={{ gap: 8 }}>
+            <Tag tone={h.active >= h.limit ? 'bad' : h.active ? 'warn' : 'neutral'}>{h.active} of {h.limit} active</Tag>
+            <Tag tone={ACCOUNT_STATUS[h.status].tone}>{ACCOUNT_STATUS[h.status].label}</Tag>
+            <span className="muted" style={{ fontSize: 12 }}>{h.warnings.length} sent in total</span>
+          </div>
+          {h.status === 'banned' && <div className="alert alert-bad"><Icon name="prohibit" />Banned. Remove warnings below the limit, then reactivate the account from the list to lift the ban.</div>}
+          <div className="divided" style={{ maxHeight: 260, overflowY: 'auto', border: '1px solid var(--color-border)', borderRadius: 10 }}>
+            {!h.warnings.length && <p className="muted" style={{ padding: 14, fontSize: 13 }}>No warnings yet.</p>}
+            {h.warnings.map((w) => (
+              <div key={w.id} className="row" style={{ gap: 10, padding: '10px 14px', alignItems: 'flex-start', opacity: w.active ? 1 : 0.6 }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 14, textDecoration: w.active ? 'none' : 'line-through' }}>{w.reason}</div>
+                  <div className="muted" style={{ fontSize: 12 }}>{fmtStamp(w.at)}{w.issuedBy ? ` · by ${w.issuedBy}` : ''}{w.removedAt ? ` · removed ${fmtStamp(w.removedAt)}${w.removedBy ? ` by ${w.removedBy}` : ''}` : ''}</div>
+                </div>
+                {w.active && <button className="btn btn-ghost btn-xs" disabled={busy} onClick={() => remove(w.id)}>Remove</button>}
+              </div>
+            ))}
+          </div>
+          {h.status !== 'banned' && (
+            <form key={formKey} onSubmit={issue} style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <Field label={`Issue warning ${next} of ${h.limit}${next >= h.limit ? ' (this bans the account)' : ''}`}>
+                <textarea className="input" name="reason" placeholder="What rule was broken? The user sees this reason." />
+              </Field>
+              <ErrorBox error={error} />
+              <div className="dialog-actions">
+                <button type="button" className="btn btn-secondary" onClick={onClose}>Close</button>
+                <button type="submit" className={`btn ${next >= h.limit ? 'btn-danger' : 'btn-primary'}`} disabled={busy}>{next >= h.limit ? 'Warn and ban' : 'Send warning'}</button>
+              </div>
+            </form>
+          )}
+          {h.status === 'banned' && <div className="dialog-actions"><button type="button" className="btn btn-secondary" onClick={onClose}>Close</button></div>}
+        </>
+      )}
+    </Modal>
+  );
+}
 const ROLE_NAMES = { student: 'Student', teacher: 'Tutor', parent: 'Parent' } as const;
 
 export function AdminAccounts() {
@@ -453,6 +527,7 @@ export function AdminAccounts() {
   const [q, setQ] = useState('');
   const res = useApi<{ total: number; users: AccountRow[] }>(`/admin/users?role=${role}&q=${encodeURIComponent(q)}`);
   const [confirm, setConfirm] = useState<ConfirmSpec | null>(null);
+  const [warning, setWarning] = useState<AccountRow | null>(null);
   const { run, error } = useAction();
   const toast = useToast();
   const d = res.data;
@@ -465,12 +540,19 @@ export function AdminAccounts() {
         yes: 'Deactivate',
         action: attempt(() => api(`/admin/users/${u.id}/status`, { body: { status: 'deactivated' } }), () => toast(`${u.name} was deactivated.`)),
       });
+    else if (u.status === 'banned')
+      setConfirm({
+        title: `Lift ${u.name}’s ban?`,
+        body: `They can sign in again. ${u.warnings ? `They still have ${u.warnings} active warning${u.warnings > 1 ? 's' : ''}; the next warning bans them again unless you remove some first.` : ''}`,
+        yes: 'Lift ban',
+        action: attempt(() => api(`/admin/users/${u.id}/status`, { body: { status: 'active' } }), () => toast(`${u.name}’s ban was lifted.`)),
+      });
     else void run(() => api(`/admin/users/${u.id}/status`, { body: { status: 'active' } })).then((r) => r && toast(`${u.name} was reactivated.`));
   };
 
   return (
     <section className="page" style={{ gap: 18 }}>
-      <PageHead title="Accounts" sub="Deactivated accounts can’t log in and are left out of k-means clustering." />
+      <PageHead title="Accounts" sub="Deactivated and banned accounts can’t log in and are left out of k-means clustering. Three active warnings ban an account automatically." />
       <ErrorBox error={error} />
       <div className="card card-clip">
         <div className="row wrap" style={{ gap: 12, padding: '12px 16px', borderBottom: '1px solid var(--color-border)' }}>
@@ -486,7 +568,7 @@ export function AdminAccounts() {
         ) : (
           <div className="table-scroll">
             <table className="table hover">
-              <thead><tr><th>Name</th><th>Role</th><th>Email</th><th>Joined</th><th>Status</th><th /></tr></thead>
+              <thead><tr><th>Name</th><th>Role</th><th>Email</th><th>Joined</th><th>Status</th><th>Warnings</th><th /></tr></thead>
               <tbody>
                 {d.users.map((u) => {
                   const act = u.status === 'active';
@@ -496,9 +578,11 @@ export function AdminAccounts() {
                       <td>{ROLE_NAMES[u.role]}</td>
                       <td className="muted">{u.email}</td>
                       <td>{fmtDate(u.joined)}</td>
-                      <td><Tag tone={act ? 'ok' : 'bad'} size="sm">{act ? 'Active' : 'Deactivated'}</Tag></td>
-                      <td style={{ textAlign: 'right' }}>
-                        <button className={`btn btn-xs ${act ? 'btn-danger' : 'btn-primary'}`} onClick={() => toggle(u)}>{act ? 'Deactivate' : 'Reactivate'}</button>
+                      <td><Tag tone={ACCOUNT_STATUS[u.status].tone} size="sm">{ACCOUNT_STATUS[u.status].label}</Tag></td>
+                      <td><button className="btn btn-ghost btn-xs" onClick={() => setWarning(u)}><Tag tone={u.warnings >= WARNING_LIMIT ? 'bad' : u.warnings ? 'warn' : 'neutral'} size="sm">{u.warnings} / {WARNING_LIMIT}</Tag></button></td>
+                      <td className="nowrap" style={{ textAlign: 'right' }}>
+                        <button className="btn btn-secondary btn-xs" onClick={() => setWarning(u)}>Warn</button>{' '}
+                        <button className={`btn btn-xs ${act ? 'btn-danger' : 'btn-primary'}`} onClick={() => toggle(u)}>{act ? 'Deactivate' : u.status === 'banned' ? 'Lift ban' : 'Reactivate'}</button>
                       </td>
                     </tr>
                   );
@@ -509,6 +593,7 @@ export function AdminAccounts() {
         )}
         {d && d.total > d.users.length && <p className="muted" style={{ padding: '12px 16px', fontSize: 12 }}>Showing {d.users.length} of {d.total}. Search to narrow down.</p>}
       </div>
+      {warning && <WarningsModal user={warning} onClose={() => setWarning(null)} />}
       {confirm && <ConfirmModal spec={confirm} onClose={() => setConfirm(null)} />}
     </section>
   );

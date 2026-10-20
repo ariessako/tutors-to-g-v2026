@@ -1,7 +1,8 @@
 /** Types shared by the API server and the web client. */
 
 export type Role = 'student' | 'teacher' | 'parent' | 'admin';
-export type UserStatus = 'active' | 'deactivated';
+/** `banned`: reached the warning limit (or banned by an admin); can't sign in until an admin lifts it. */
+export type UserStatus = 'active' | 'deactivated' | 'banned';
 export type AppStatus = 'draft' | 'pending' | 'needs_changes' | 'approved' | 'rejected';
 export type SessionStatus = 'pending' | 'accepted' | 'declined' | 'completed';
 export type LinkStatus = 'pending_student' | 'pending_admin' | 'approved' | 'declined';

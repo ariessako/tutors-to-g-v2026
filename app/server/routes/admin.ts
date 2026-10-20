@@ -1,8 +1,8 @@
 import { randomBytes } from 'node:crypto';
 import { Router } from 'express';
-import { and, eq, ne, sql } from 'drizzle-orm';
+import { and, eq, isNull, ne, sql } from 'drizzle-orm';
 import { z } from 'zod';
-import { applicationDocs, applicationHistory, applications, authSessions, parentLinks, reviews, settings, tutoringSessions, users } from '../db/schema';
+import { applicationDocs, applicationHistory, applications, authSessions, parentLinks, reviews, settings, tutoringSessions, users, warnings } from '../db/schema';
 import { HttpError, hashPassword, requireUser } from '../auth';
 import { emailSchema, profileSchema, tutorDetailsSchema, type Ctx } from '../context';
 import { logEvent, nowIso, uid } from '../services';
@@ -28,6 +28,7 @@ export function adminRoutes(ctx: Ctx) {
     const flagged = db.select().from(reviews).all().filter(needsAttention);
     const people = db.select({ status: users.status, role: users.role }).from(users).where(ne(users.role, 'admin')).all();
     const links = db.select({ id: parentLinks.id }).from(parentLinks).where(eq(parentLinks.status, 'pending_admin')).all();
+    const sent = db.select({ removedAt: warnings.removedAt }).from(warnings).all();
     const who = nameMap(db, [...forReview.map((x) => x.studentId), ...flagged.map((x) => x.tutorId)]);
     const cl = svc.clusterNow();
     res.json({
@@ -36,6 +37,9 @@ export function adminRoutes(ctx: Ctx) {
         payments: forReview.length,
         feedback: flagged.length,
         parentLinks: links.length,
+        warningsSent: sent.length,
+        warningsActive: sent.filter((w) => !w.removedAt).length,
+        banned: people.filter((p) => p.status === 'banned').length,
         active: people.filter((p) => p.status === 'active').length,
         deactivated: people.filter((p) => p.status !== 'active').length,
       },
@@ -195,10 +199,13 @@ export function adminRoutes(ctx: Ctx) {
       .all()
       .filter((u) => (role === 'all' || u.role === role) && (!q || `${u.name} ${u.email}`.toLowerCase().includes(q)))
       .sort((a, b) => a.name.localeCompare(b.name));
-    res.json({ total: list.length, users: list.slice(0, 80) });
+    const counts = new Map<string, number>();
+    for (const w of db.select({ userId: warnings.userId }).from(warnings).where(isNull(warnings.removedAt)).all()) counts.set(w.userId, (counts.get(w.userId) ?? 0) + 1);
+    res.json({ total: list.length, users: list.slice(0, 80).map((u) => ({ ...u, warnings: counts.get(u.id) ?? 0 })) });
   });
 
   r.post('/admin/users/:id/status', (req, res) => {
+    // Setting a banned account back to active lifts the ban; its warnings stay on record.
     const { status } = z.object({ status: z.enum(['active', 'deactivated']) }).parse(req.body);
     const u = db.select().from(users).where(eq(users.id, req.params.id)).get();
     if (!u || u.role === 'admin') throw new HttpError(404, 'Account not found.');

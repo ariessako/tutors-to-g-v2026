@@ -6,7 +6,7 @@ import { homePath, Shell } from './Shell';
 import { Landing } from './screens/Landing';
 import { TermsPage } from './screens/Terms';
 import { FindTutors, Matches, StudentHome, StudentSessions, TutorProfile } from './screens/Student';
-import { Group, Groups, ParentChildren, ParentProgress, Profile } from './screens/Common';
+import { Group, Groups, MyWarnings, ParentChildren, ParentProgress, Profile } from './screens/Common';
 import { TutorHome, TutorReviews, TutorSchedule, TutorSessions } from './screens/Tutor';
 
 // Admin screens and the lab load on demand; most users never open them.
@@ -70,6 +70,7 @@ const router = createBrowserRouter([
       { path: '/tutor/schedule', element: page(['teacher'], (me) => <TutorSchedule me={me} />, true) },
       { path: '/tutor/reviews', element: page(['teacher'], () => <TutorReviews />, true) },
       { path: '/progress', element: page(['parent'], () => <ParentProgress />) },
+      { path: '/warnings', element: page(['student', 'teacher', 'parent'], () => <MyWarnings />) },
       { path: '/children', element: page(['parent'], () => <ParentChildren />) },
       { path: '/admin', element: page(['admin'], () => <AdminOverview />) },
       { path: '/admin/applications', element: page(['admin'], () => <AdminApplications />) },

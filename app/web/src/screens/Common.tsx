@@ -507,3 +507,38 @@ export function ParentChildren() {
     </section>
   );
 }
+
+/** The signed-in user's warnings from admins, with the reason for each. */
+export function MyWarnings() {
+  const q = useApi<{ limit: number; active: number; warnings: { id: string; reason: string; at: string; active: boolean; removedAt: string | null }[] }>('/me/warnings');
+  if (!q.data) return q.error ? <ErrorBox error={q.error.message} /> : <Loading />;
+  const w = q.data;
+  return (
+    <section className="page" style={{ gap: 18, maxWidth: 760 }}>
+      <PageHead title="My warnings" sub={`Admins send a warning when a rule in the Terms and Conditions is broken. ${w.limit} active warnings ban the account.`} />
+      <div className="card card-pad row wrap" style={{ gap: 16 }}>
+        <span className="head-font" style={{ fontSize: 40, fontWeight: 700, lineHeight: 1 }}>{w.active} / {w.limit}</span>
+        <span className="muted" style={{ fontSize: 13 }}>
+          {w.active === 0 ? 'No active warnings. Keep it up.' : w.active >= w.limit - 1 ? 'One more warning will ban your account.' : `${w.limit - w.active} more warnings will ban your account.`}
+          <br />{w.warnings.length} warning{w.warnings.length === 1 ? '' : 's'} received in total.
+        </span>
+      </div>
+      <div className="card card-clip">
+        {!w.warnings.length && <p className="muted" style={{ padding: 20 }}>You haven’t received any warnings.</p>}
+        <div className="divided">
+          {w.warnings.map((x) => (
+            <div key={x.id} className="row" style={{ gap: 12, padding: '14px 20px', alignItems: 'flex-start' }}>
+              <Icon name="warning" style={{ fontSize: 20, color: x.active ? 'var(--t-warn-fg)' : 'var(--color-muted)' }} />
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 14 }}>{x.reason}</div>
+                <div className="muted" style={{ fontSize: 12 }}>{fmtStamp(x.at)}{x.removedAt ? ` · removed by an admin ${fmtStamp(x.removedAt)}` : ''}</div>
+              </div>
+              <Tag tone={x.active ? 'warn' : 'neutral'} size="sm">{x.active ? 'Active' : 'Removed'}</Tag>
+            </div>
+          ))}
+        </div>
+      </div>
+      <p className="muted" style={{ fontSize: 13 }}>To appeal a warning, contact the Tutors To Go admins at support@tutorstogo.ph. <a href="/terms" target="_blank" rel="noopener noreferrer" className="link">Read the Terms and Conditions</a>.</p>
+    </section>
+  );
+}

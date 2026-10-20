@@ -37,6 +37,7 @@ export function authRoutes(ctx: Ctx) {
     const body = z.object({ email: z.string(), password: z.string() }).parse(req.body);
     const u = byEmail(body.email);
     if (!u || !(await verifyPassword(body.password, u.passwordHash))) throw new HttpError(400, 'Email or password is incorrect.');
+    if (u.status === 'banned') throw new HttpError(403, 'This account has been banned after repeated warnings. Contact the Tutors To Go admin to appeal.');
     if (u.status !== 'active') throw new HttpError(403, 'This account has been deactivated. Contact the Tutors To Go admin.');
     startSession(db, res, u.id);
     res.json({ me: meDto(db, u) });

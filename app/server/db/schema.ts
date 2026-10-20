@@ -122,6 +122,17 @@ export const tutoringSessions = sqliteTable('tutoring_sessions', {
   completedAt: text('completed_at'),
 });
 
+/** Warnings an admin issued to a user. Removed warnings stay on record but don't count. */
+export const warnings = sqliteTable('warnings', {
+  id: text('id').primaryKey(),
+  userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  issuedBy: text('issued_by').references(() => users.id, { onDelete: 'set null' }),
+  reason: text('reason').notNull(),
+  at: text('at').notNull(),
+  removedAt: text('removed_at'),
+  removedBy: text('removed_by').references(() => users.id, { onDelete: 'set null' }),
+});
+
 /** Timeline of everything that happened to a session. */
 export const sessionEvents = sqliteTable('session_events', {
   id: integer('id').primaryKey({ autoIncrement: true }),

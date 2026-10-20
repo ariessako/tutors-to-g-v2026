@@ -30,6 +30,9 @@ export const SCHEDULE_HOURS = [
   '08:00', '09:00', '10:00', '11:00', '12:00', '13:00', '14:00', '15:00', '16:00', '17:00', '18:00', '19:00', '20:00',
 ] as const;
 
+/** Active warnings that ban an account automatically. */
+export const WARNING_LIMIT = 3;
+
 /** What students and parents rate besides the overall stars. */
 export const CRITERIA = [
   { key: 'clarity', label: 'Explains clearly' },

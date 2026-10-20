@@ -337,6 +337,54 @@ describe('parent links', () => {
   });
 });
 
+describe('warnings', () => {
+  it('shows users their warnings and bans the account at three', async () => {
+    const admin = await as('admin@tutorstogo.ph');
+    const target = (await admin.get('/api/admin/users?role=student')).body.users.find((u: { id: string; status: string; warnings: number }) => u.status === 'active' && !u.warnings && u.id !== 's_bea');
+    const student = await as(target.email);
+    expect((await student.get('/api/me/warnings')).body).toMatchObject({ limit: 3, active: 0, warnings: [] });
+    expect((await admin.post(`/api/admin/users/${target.id}/warnings`).send({ reason: 'no' })).status).toBe(400);
+    expect((await student.post(`/api/admin/users/${target.id}/warnings`).send({ reason: 'Self-warning attempt' })).status).toBe(403);
+
+    const first = await admin.post(`/api/admin/users/${target.id}/warnings`).send({ reason: 'Rude comment in a study group.' });
+    expect(first.body).toMatchObject({ count: 1, banned: false });
+    const mine = (await student.get('/api/me/warnings')).body;
+    expect(mine.active).toBe(1);
+    expect(mine.warnings[0].reason).toBe('Rude comment in a study group.');
+    expect(mine.warnings[0].issuedBy).toBeUndefined();
+
+    const second = (await admin.post(`/api/admin/users/${target.id}/warnings`).send({ reason: 'Spam posts in a study group.' })).body;
+    expect(second.count).toBe(2);
+    // A removed warning stays on record but no longer counts.
+    const newest = (await admin.get(`/api/admin/users/${target.id}/warnings`)).body.warnings[0];
+    expect((await admin.post(`/api/admin/warnings/${newest.id}/remove`)).body.active).toBe(1);
+    expect((await student.get('/api/me/warnings')).body).toMatchObject({ active: 1, warnings: [{ active: false }, { active: true }] });
+    await admin.post(`/api/admin/users/${target.id}/warnings`).send({ reason: 'Shared a classmate’s phone number.' });
+    const third = (await admin.post(`/api/admin/users/${target.id}/warnings`).send({ reason: 'Harassed a tutor in messages.' })).body;
+    expect(third).toMatchObject({ count: 3, banned: true });
+
+    // Banned: signed out everywhere and can't sign back in.
+    expect((await student.get('/api/me/warnings')).status).toBe(401);
+    const login = await request(app).post('/api/auth/login').send({ email: target.email, password: 'demo123' });
+    expect(login.status).toBe(403);
+    expect(login.body.error).toMatch(/banned/);
+    const row = (await admin.get(`/api/admin/users?q=${encodeURIComponent(target.email)}`)).body.users[0];
+    expect(row).toMatchObject({ status: 'banned', warnings: 3 });
+    const overview = (await admin.get('/api/admin/overview')).body.counts;
+    expect(overview.warningsSent).toBeGreaterThanOrEqual(4);
+    expect(overview.banned).toBeGreaterThanOrEqual(1);
+
+    // Lifting the ban lets them back in.
+    expect((await admin.post(`/api/admin/users/${target.id}/status`).send({ status: 'active' })).status).toBe(200);
+    expect((await request(app).post('/api/auth/login').send({ email: target.email, password: 'demo123' })).status).toBe(200);
+  });
+
+  it('shows the demo tutor the warning an admin sent', async () => {
+    const paolo = await as('paolo.reyes@tutor.ph');
+    expect((await paolo.get('/api/me/warnings')).body).toMatchObject({ active: 1, limit: 3 });
+  });
+});
+
 describe('admin settings', () => {
   it('changes the live model', async () => {
     const admin = await as('admin@tutorstogo.ph');

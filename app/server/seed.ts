@@ -389,14 +389,22 @@ export async function seedDemo(db: Db, uploadsDir: string, today = new Date()) {
     { id: 'pl_ramon_bea', parentId: 'p_ramon', studentId: 's_bea', status: 'pending_student', requestedAt: stampAgo(0, 8, 15) },
   ];
 
+  // Warnings: Paolo has one active (so the demo tutor sees the banner), another tutor has one plus one removed.
+  const warningRows: (typeof t.warnings.$inferInsert)[] = [
+    { id: 'w1', userId: 't_paolo', issuedBy: 'admin', reason: 'Started a session 15 minutes late without telling the student.', at: stampAgo(9, 10) },
+    { id: 'w2', userId: Tt[12].id, issuedBy: 'admin', reason: 'Asked a student to pay outside the platform.', at: stampAgo(3, 14) },
+    { id: 'w3', userId: Tt[12].id, issuedBy: 'admin', reason: 'Missed a confirmed session.', at: stampAgo(20, 9), removedAt: stampAgo(18, 9), removedBy: 'admin' },
+  ];
+
   const oldFiles = db.select({ storedName: t.files.storedName }).from(t.files).all();
   db.transaction((tx) => {
-    for (const table of [t.sessionEvents, t.parentLinks, t.posts, t.threads, t.groupInvites, t.groupMembers, t.groups, t.reviews, t.tutoringSessions, t.applicationHistory, t.applicationDocs, t.applications, t.authSessions, t.files, t.settings, t.users]) {
+    for (const table of [t.warnings, t.sessionEvents, t.parentLinks, t.posts, t.threads, t.groupInvites, t.groupMembers, t.groups, t.reviews, t.tutoringSessions, t.applicationHistory, t.applicationDocs, t.applications, t.authSessions, t.files, t.settings, t.users]) {
       tx.delete(table).run();
     }
     tx.run(sql`DELETE FROM sqlite_sequence`);
     for (let i = 0; i < userRows.length; i += 50) tx.insert(t.users).values(userRows.slice(i, i + 50)).run();
     tx.insert(t.parentLinks).values(linkRows).run();
+    tx.insert(t.warnings).values(warningRows).run();
     for (let i = 0; i < fileRows.length; i += 50) tx.insert(t.files).values(fileRows.slice(i, i + 50)).run();
     tx.insert(t.applications).values(appRows).run();
     tx.insert(t.applicationDocs).values(docRows).run();
