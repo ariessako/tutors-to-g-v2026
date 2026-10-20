@@ -53,7 +53,7 @@ function Hero() {
         </span>
         <h1 style={{ fontSize: 52, lineHeight: 1.04, letterSpacing: '-.02em', textWrap: 'balance' }}>Find a tutor who gets how you learn.</h1>
         <p className="muted pretty" style={{ fontSize: 17 }}>
-          Tell us your hobbies, learning style, personality and free time. We group you with licensed tutors who share them, all familiar with the K–12 and MATATAG curriculum.
+          Tell us your hobbies, learning style, personality and free time. We group you with verified tutors who share them, all familiar with the K–12 and MATATAG curriculum.
         </p>
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 18, maxWidth: 640 }}>

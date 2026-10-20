@@ -523,7 +523,7 @@ export function TutorProfile({ me }: { me: Me }) {
           <Avatar name={t.name} size={96} style={{ border: '4px solid var(--color-surface)', boxShadow: 'var(--shadow-sm)' }} />
           <div style={{ flex: 1, minWidth: 260, display: 'flex', flexDirection: 'column', gap: 6, paddingBottom: 4 }}>
             <div className="row wrap" style={{ gap: 6 }}>
-              <Tag tone="ok" icon="seal-check">PRC verified</Tag>
+              <Tag tone="ok" icon="seal-check">{t.licenseType === 'licensed' ? 'PRC verified' : 'Documents verified'}</Tag>
               <Tag tone="accent" icon="circles-three-plus">{m ? `Cluster ${m.cluster}${m.yourCluster ? ' · your cluster' : ''}` : 'Approved tutor'}</Tag>
             </div>
             <h1 style={{ fontSize: 32 }}>{t.name}</h1>

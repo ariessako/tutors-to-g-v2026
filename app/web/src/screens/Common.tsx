@@ -467,7 +467,7 @@ export function ParentChildren() {
   return (
     <section className="page" style={{ gap: 18 }}>
       <PageHead title="Children" sub="Link each child’s student account. Your child confirms the request, then an admin verifies it before you see their sessions." />
-      <form key={formKey} onSubmit={request} className="card card-pad row wrap" style={{ gap: 12, alignItems: 'flex-end', maxWidth: 720 }}>
+      <form key={formKey} onSubmit={request} className="card card-pad row wrap" style={{ flexDirection: 'row', gap: 12, alignItems: 'flex-end', maxWidth: 720 }}>
         <div style={{ flex: 1, minWidth: 240 }}>
           <Field label="Your child’s student email"><input className="input" name="email" type="email" required placeholder="e.g. bea@student.ph" /></Field>
         </div>

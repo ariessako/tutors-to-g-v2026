@@ -38,7 +38,7 @@ export function AdminOverview() {
   if (!q.data) return q.error ? <ErrorBox error={q.error.message} /> : <Loading />;
   const { counts: c, queue, model } = q.data;
   const tiles = [
-    { n: c.applications, icon: 'identification-card', label: 'Applications to review', sub: 'PRC, PSA, TOR and demo video', to: '/admin/applications' },
+    { n: c.applications, icon: 'identification-card', label: 'Applications to review', sub: 'PRC or diploma, PSA, TOR and demo video', to: '/admin/applications' },
     { n: c.payments, icon: 'receipt', label: 'Payments to approve', sub: 'Receipts uploaded by students', to: '/admin/payments' },
     { n: c.feedback, icon: 'chat-circle-text', label: 'Feedback to check', sub: 'New ratings of 3 stars or lower', to: '/admin/feedback' },
     { n: c.parentLinks, icon: 'link', label: 'Parent links to verify', sub: 'Confirmed by the student', to: '/admin/parent-links' },
@@ -166,7 +166,7 @@ export function AdminApplications() {
   const sel = list.find((a) => a.id === wanted) ?? (wanted ? all.find((a) => a.id === wanted) : undefined) ?? list[0];
   return (
     <section className="page" style={{ gap: 18 }}>
-      <PageHead title="Tutor applications" sub="Check each applicant’s PRC license, PSA birth certificate, transcript and demo video. Only approved tutors enter the matching model." />
+      <PageHead title="Tutor applications" sub="Check each applicant’s PRC license (or diploma or certificate of enrollment for non-licensed tutors), PSA birth certificate, transcript and demo video. Only approved tutors enter the matching model." />
       <Seg
         label="Application status"
         value={filter}

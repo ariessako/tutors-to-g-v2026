@@ -113,7 +113,7 @@ export function ProfileFields({ mode, profile, tutor, details = false }: { mode:
               <input className="input sm" name="years" type="number" min={0} defaultValue={t.years} onChange={(e) => setYears(Number(e.target.value) || 0)} />
             </Field>
             <p className="muted" style={{ gridColumn: '1 / -1', fontSize: 12 }}>
-              <Icon name="info" /> Your rate tier: <strong>{band.label}</strong>. {band.who} can set any rate from ₱{band.min.toLocaleString('en-US')} to ₱{band.max.toLocaleString('en-US')} an hour{t.licenseType === 'licensed' ? `; licensed teachers with ${SENIOR_YEARS}+ years move up to ₱${RATE_TIERS.licensed_senior.max.toLocaleString('en-US')}` : ''}.
+              <Icon name="info" /> Your rate tier: <strong>{band.label}</strong>. {band.who} can set any rate from ₱{band.min.toLocaleString('en-US')} to ₱{band.max.toLocaleString('en-US')} an hour{tierFor(t.licenseType, years) === 'licensed' ? `; with ${SENIOR_YEARS}+ years of teaching you move up to ₱${RATE_TIERS.licensed_senior.min}–₱${RATE_TIERS.licensed_senior.max.toLocaleString('en-US')}` : ''}.
             </p>
             <Field label="Degree and school" style={{ gridColumn: '1 / -1' }}>
               <input className="input sm" name="education" defaultValue={t.education} placeholder="e.g. BSEd Mathematics · Philippine Normal University" maxLength={200} />
