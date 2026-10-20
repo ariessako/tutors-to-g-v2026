@@ -5,13 +5,14 @@ import { eq, ne } from 'drizzle-orm';
 import request from 'supertest';
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { createApp } from '../server/app';
+import { close, serve } from './serve';
 import { hashPassword } from '../server/auth';
 import { openDb } from '../server/db';
 import { applications, parentLinks, reviews, tutoringSessions, users } from '../server/db/schema';
 import type { SessionStatus } from '../shared/types';
 
 let db: ReturnType<typeof openDb>;
-let app: ReturnType<typeof createApp>['app'];
+let app: ReturnType<typeof serve>;
 let dir: string;
 let passwordHash: string;
 const profile = { hobbies: ['Coding', 'Anime', 'Music'], learning: 'Visual', social: 0.3, approach: 0.8, subjects: ['Math'], sched: ['Weekends'], grades: ['Senior High'] };
@@ -26,9 +27,10 @@ beforeEach(() => {
   }
   db.insert(parentLinks).values({ id: 'pl1', parentId: 'p1', studentId: 's1', status: 'approved', requestedAt: '2026-01-01' }).run();
   db.insert(applications).values({ userId: 't1', status: 'approved' }).run();
-  app = createApp({ db, uploadsDir: join(dir, 'uploads'), demo: false }).app;
+  app = serve(createApp({ db, uploadsDir: join(dir, 'uploads'), demo: false }).app);
 });
-afterEach(() => {
+afterEach(async () => {
+  await close(app);
   db.$client.close();
   if (dirname(resolve(dir)) !== resolve(tmpdir()) || !dir.includes('ttg-regression-')) throw new Error('Unexpected test directory');
   rmSync(dir, { recursive: true, force: true });
@@ -88,15 +90,15 @@ describe('review limits', () => {
   it.each(['s1', 'p1'])('allows only one simultaneous review by %s across database connections', async (id) => {
     session();
     const secondDb = openDb(join(dir, 'test.db'));
+    const otherApp = serve(createApp({ db: secondDb, uploadsDir: join(dir, 'uploads'), demo: false }).app);
     try {
-      const otherApp = createApp({ db: secondDb, uploadsDir: join(dir, 'uploads'), demo: false }).app;
       const first = await as(id);
       const second = await as(id, otherApp);
       const body = { ...review, ...(id === 's1' ? { sessionId: 'lesson' } : {}) };
       const responses = await Promise.all([first.post('/api/reviews').send(body), second.post('/api/reviews').send(body)]);
       expect(responses.map((r) => r.status).sort()).toEqual([201, 409]);
       expect(db.select().from(reviews).all()).toHaveLength(1);
-    } finally { secondDb.$client.close(); }
+    } finally { await close(otherApp); secondDb.$client.close(); }
   });
 });
 

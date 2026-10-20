@@ -6,6 +6,10 @@ export type AppStatus = 'draft' | 'pending' | 'needs_changes' | 'approved' | 're
 export type SessionStatus = 'pending' | 'accepted' | 'declined' | 'completed';
 export type LinkStatus = 'pending_student' | 'pending_admin' | 'approved' | 'declined';
 export type PaymentStatus = 'unpaid' | 'for_review' | 'paid' | 'rejected';
+export type Attendance = 'present' | 'late' | 'no_show';
+/** Things that happen to a session, logged in order for its timeline. */
+export type SessionEventKind =
+  | 'requested' | 'accepted' | 'declined' | 'auto_declined' | 'receipt_uploaded' | 'payment_approved' | 'payment_rejected' | 'completed';
 export type ReviewStatus = 'new' | 'reviewed' | 'action';
 
 /** The matching profile: everything k-means sees about a person. */

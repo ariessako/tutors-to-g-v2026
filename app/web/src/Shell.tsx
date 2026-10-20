@@ -40,6 +40,7 @@ export function navFor(me: Me): NavItem[] {
     { to: '/admin/applications', label: 'Applications', icon: 'identification-card' },
     { to: '/admin/tutors', label: 'Tutors', icon: 'database' },
     { to: '/admin/accounts', label: 'Accounts', icon: 'users' },
+    { to: '/admin/sessions', label: 'Sessions', icon: 'calendar-check' },
     { to: '/admin/payments', label: 'Payments', icon: 'receipt' },
     { to: '/admin/parent-links', label: 'Parent links', icon: 'link' },
     { to: '/admin/feedback', label: 'Feedback', icon: 'chat-circle-text' },

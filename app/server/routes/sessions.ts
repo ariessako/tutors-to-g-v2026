@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { applications, groupInvites, groupMembers, reviews, tutoringSessions, users } from '../db/schema';
 import { HttpError, requireUser, type User } from '../auth';
 import { saveFile, type Ctx } from '../context';
-import { childIdsOf, nowIso, uid } from '../services';
+import { childIdsOf, logEvent, nowIso, uid } from '../services';
 import { reviewViews, sessionViews } from '../views';
 import { iso, slotDate, sortSlots } from '../../shared/format';
 import { SESSION_HOURS, SESSION_MODES } from '../../shared/vocab';
@@ -223,6 +223,7 @@ export function sessionRoutes(ctx: Ctx) {
       tx.insert(tutoringSessions)
         .values({ id, studentId: me.id, tutorId: t.id, subject: d.subject, date: d.date, slot: d.slot, hours: d.hours, mode: d.mode, topic: d.topic, learner: d.learner, guardian: d.guardian, status: 'pending', amount: (t.rate ?? 0) * d.hours, createdAt: nowIso() })
         .run();
+      logEvent(tx, id, 'requested', me.id);
       return id;
     }, { behavior: 'immediate' });
     res.status(201).json({ id });
@@ -259,6 +260,7 @@ export function sessionRoutes(ctx: Ctx) {
         if (message) throw new HttpError(409, message);
       }
       tx.update(tutoringSessions).set({ status: accept ? 'accepted' : 'declined' }).where(eq(tutoringSessions.id, s.id)).run();
+      logEvent(tx, s.id, accept ? 'accepted' : 'declined', me.id);
       if (!accept) return 0;
       // A tutor teaches one class at a time, so other requests for the same time are declined.
       const clashing = tx.select().from(tutoringSessions)
@@ -271,17 +273,41 @@ export function sessionRoutes(ctx: Ctx) {
           .set({ status: 'declined', declineReason: 'The tutor is already booked at this time.' })
           .where(inArray(tutoringSessions.id, clashing))
           .run();
+        for (const id of clashing) logEvent(tx, id, 'auto_declined', null, 'The tutor accepted another session at this time.');
       }
       return clashing.length;
     }, { behavior: 'immediate' });
     res.json({ ok: true, autoDeclined });
   });
 
+  /** The tutor closes a session with its log: attendance, actual length, topics covered and notes. */
   r.post('/sessions/:id/complete', (req, res) => {
     const me = requireUser(req, 'teacher');
-    const s = ownSession(me, req.params.id, 'tutorId');
-    if (s.status !== 'accepted') throw new HttpError(409, 'Only accepted sessions can be completed.');
-    db.update(tutoringSessions).set({ status: 'completed' }).where(eq(tutoringSessions.id, s.id)).run();
+    const d = z
+      .object({
+        attendance: z.enum(['present', 'late', 'no_show'], 'Record whether the student attended.'),
+        actualHours: z.number().min(0).max(4).multipleOf(0.25).optional(),
+        topics: z.string().trim().max(1000).default(''),
+        notes: z.string().trim().max(2000).default(''),
+      })
+      .parse(req.body ?? {});
+    if (d.attendance !== 'no_show' && d.topics.length < 3) throw new HttpError(400, 'Add the topics you covered.');
+    db.transaction((tx) => {
+      const s = ownSession(me, req.params.id, 'tutorId');
+      if (s.status !== 'accepted') throw new HttpError(409, 'Only accepted sessions can be completed.');
+      tx.update(tutoringSessions)
+        .set({
+          status: 'completed',
+          attendance: d.attendance,
+          actualHours: d.attendance === 'no_show' ? 0 : (d.actualHours ?? s.hours),
+          topicsCovered: d.topics,
+          sessionNotes: d.notes,
+          completedAt: nowIso(),
+        })
+        .where(eq(tutoringSessions.id, s.id))
+        .run();
+      logEvent(tx, s.id, 'completed', me.id, { present: 'Student attended', late: 'Student was late', no_show: 'Student did not attend' }[d.attendance]);
+    }, { behavior: 'immediate' });
     res.json({ ok: true });
   });
 
@@ -302,6 +328,7 @@ export function sessionRoutes(ctx: Ctx) {
       .set({ paymentStatus: 'for_review', paymentRef: body.reference || null, receiptFileId: fileId, receiptName: req.file.originalname, amountPaid: body.amount, receiptAt: nowIso(), reviewedAt: null })
       .where(eq(tutoringSessions.id, s.id))
       .run();
+    logEvent(db, s.id, 'receipt_uploaded', me.id, `₱${body.amount.toLocaleString('en-US')}`);
     res.json({ ok: true });
   });
 

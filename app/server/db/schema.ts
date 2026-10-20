@@ -1,6 +1,8 @@
 import { integer, primaryKey, real, sqliteTable, text } from 'drizzle-orm/sqlite-core';
 import type {
   AppStatus,
+  Attendance,
+  SessionEventKind,
   LinkStatus,
   PaymentStatus,
   Profile,
@@ -111,6 +113,22 @@ export const tutoringSessions = sqliteTable('tutoring_sessions', {
   amountPaid: real('amount_paid'),
   receiptAt: text('receipt_at'),
   reviewedAt: text('reviewed_at'),
+  // Session log, filled in by the tutor when marking the session completed.
+  attendance: text('attendance').$type<Attendance>(),
+  actualHours: real('actual_hours'),
+  topicsCovered: text('topics_covered'),
+  sessionNotes: text('session_notes'),
+  completedAt: text('completed_at'),
+});
+
+/** Timeline of everything that happened to a session. */
+export const sessionEvents = sqliteTable('session_events', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  sessionId: text('session_id').notNull().references(() => tutoringSessions.id, { onDelete: 'cascade' }),
+  at: text('at').notNull(),
+  kind: text('kind').$type<SessionEventKind>().notNull(),
+  actorId: text('actor_id').references(() => users.id, { onDelete: 'set null' }),
+  detail: text('detail').notNull().default(''),
 });
 
 /**

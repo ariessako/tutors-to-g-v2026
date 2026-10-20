@@ -7,6 +7,7 @@ import { api, useAction, useApi } from '../api';
 import { BarChart } from '../charts';
 import { APPLICATION } from '../labels';
 import { attempt, ConfirmModal, type ConfirmSpec } from '../modals/Confirm';
+import { ATTENDANCE, CompleteModal, SessionDetailsModal } from '../modals/SessionModals';
 import type { ApplicationView, ReviewView, SessionView, TutorStats } from '../types';
 import { Avatar, CardHead, DateTile, ErrorBox, Icon, Loading, PageHead, Stat, Tag, useToast } from '../ui';
 import { PayTag, RatingDist } from './Student';
@@ -317,9 +318,9 @@ export function TutorSessions() {
       yes: 'Decline request',
       action: attempt(() => api(`/sessions/${x.id}/respond`, { body: { accept: false } }), () => toast('Request declined.')),
     });
-  const complete = async (x: SessionView) => {
-    if (await run(() => api(`/sessions/${x.id}/complete`, { method: 'POST' }))) toast('Marked as completed. The student can now rate the session.');
-  };
+  const [completing, setCompleting] = useState<SessionView | null>(null);
+  const [details, setDetails] = useState<SessionView | null>(null);
+  const complete = (x: SessionView) => setCompleting(x);
 
   return (
     <section className="page" style={{ gap: 22 }}>
@@ -372,7 +373,7 @@ export function TutorSessions() {
                     <td><div>{r.subject}</div><div className="muted" style={{ fontSize: 12 }}>{r.topic}</div></td>
                     <td style={{ fontWeight: 600 }}>{peso(r.amount)}</td>
                     <td><PayTag x={r} /></td>
-                    <td style={{ textAlign: 'right' }}><button className="btn btn-secondary btn-xs" onClick={() => complete(r)}>Mark completed</button></td>
+                    <td style={{ textAlign: 'right' }}><button className="btn btn-secondary btn-xs" onClick={() => complete(r)}>Log &amp; complete</button></td>
                   </tr>
                 ))}
               </tbody>
@@ -393,6 +394,8 @@ export function TutorSessions() {
                     <td>{r.subject}</td>
                     <td style={{ fontWeight: 600 }}>{peso(r.amount)}</td>
                     <td><PayTag x={r} /></td>
+                    <td>{r.log?.attendance && <Tag tone={ATTENDANCE[r.log.attendance].tone} size="sm">{ATTENDANCE[r.log.attendance].label}</Tag>}</td>
+                    <td style={{ textAlign: 'right' }}><button className="btn btn-secondary btn-xs" onClick={() => setDetails(r)}>Log</button></td>
                   </tr>
                 ))}
               </tbody>
@@ -400,6 +403,8 @@ export function TutorSessions() {
           </div>
         </div>
       )}
+      {completing && <CompleteModal session={completing} onClose={() => setCompleting(null)} />}
+      {details && <SessionDetailsModal session={details} onClose={() => setDetails(null)} />}
       {confirm && <ConfirmModal spec={confirm} onClose={() => setConfirm(null)} />}
     </section>
   );

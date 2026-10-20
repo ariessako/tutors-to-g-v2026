@@ -2,12 +2,13 @@ import { useState, type FormEvent } from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
 import type { AppStatus, PaymentStatus, Profile, TutorDetails } from '../../../shared/types';
 import { validateProfile } from '../../../shared/matching';
-import { fmtDate, fmtStamp, peso, stars } from '../../../shared/format';
+import { fmtDate, fmtStamp, fmtTime, peso, stars } from '../../../shared/format';
 import { api, useAction, useApi } from '../api';
-import { APPLICATION, LINK, REVIEW, type LinkView } from '../labels';
+import { APPLICATION, LINK, PAYMENT, REVIEW, SESSION, type LinkView } from '../labels';
+import { ATTENDANCE, SessionDetailsModal } from '../modals/SessionModals';
 import { attempt, ConfirmModal, type ConfirmSpec } from '../modals/Confirm';
 import { ProfileFields, readProfile, readTutor } from '../ProfileFields';
-import type { ReviewView } from '../types';
+import type { ReviewView, SessionView } from '../types';
 import { Avatar, CardHead, ErrorBox, Field, Icon, Loading, Modal, PageHead, Seg, Tag, useToast } from '../ui';
 
 /** Opens an uploaded file, or explains that a seeded demo record has no stored file. */
@@ -607,6 +608,76 @@ export function AdminPayments() {
         )}
       </div>
       {confirm && <ConfirmModal spec={confirm} onClose={() => setConfirm(null)} />}
+    </section>
+  );
+}
+
+const SESSION_FILTERS = [
+  { value: 'all', label: 'All' },
+  { value: 'completed', label: 'Completed' },
+  { value: 'accepted', label: 'Upcoming' },
+  { value: 'pending', label: 'Requested' },
+  { value: 'declined', label: 'Declined' },
+] as const;
+
+/** Every session with its log, filterable by status and date, exportable as CSV. */
+export function AdminSessions() {
+  const [status, setStatus] = useState<(typeof SESSION_FILTERS)[number]['value']>('all');
+  const [from, setFrom] = useState('');
+  const [to, setTo] = useState('');
+  const [details, setDetails] = useState<SessionView | null>(null);
+  const qs = new URLSearchParams({ ...(status !== 'all' && { status }), ...(from && { from }), ...(to && { to }) }).toString();
+  const q = useApi<{ sessions: SessionView[] }>(`/admin/sessions${qs ? `?${qs}` : ''}`);
+  const list = q.data?.sessions ?? [];
+  const done = list.filter((s) => s.log);
+  const noShows = done.filter((s) => s.log?.attendance === 'no_show').length;
+  const hours = done.reduce((n, s) => n + (s.log?.actualHours ?? 0), 0);
+  return (
+    <section className="page" style={{ gap: 18 }}>
+      <PageHead title="Sessions" sub="Every tutorial session with its timeline and the tutor’s log of attendance, topics and notes.">
+        <a className="btn btn-secondary" href={`/api/admin/sessions.csv${qs ? `?${qs}` : ''}`} download><Icon name="download-simple" />Export CSV</a>
+      </PageHead>
+      <div className="row wrap" style={{ gap: 12, alignItems: 'flex-end' }}>
+        <Seg label="Session status" value={status} onChange={setStatus} options={SESSION_FILTERS.map((f) => ({ value: f.value, label: f.label }))} />
+        <Field label="From"><input className="input sm" type="date" value={from} onChange={(e) => setFrom(e.target.value)} /></Field>
+        <Field label="To"><input className="input sm" type="date" value={to} onChange={(e) => setTo(e.target.value)} /></Field>
+      </div>
+      {q.data && (
+        <div className="muted" style={{ fontSize: 13 }}>
+          {list.length} session{list.length === 1 ? '' : 's'} · {done.length} logged · {hours} hour{hours === 1 ? '' : 's'} taught · {noShows} no-show{noShows === 1 ? '' : 's'}
+        </div>
+      )}
+      <div className="card card-clip">
+        {!q.data ? (
+          q.error ? <ErrorBox error={q.error.message} /> : <Loading />
+        ) : !list.length ? (
+          <p className="muted" style={{ padding: 24, textAlign: 'center' }}>No sessions match.</p>
+        ) : (
+          <div className="table-scroll">
+            <table className="table hover">
+              <thead><tr><th>Date</th><th>Student → tutor</th><th>Subject</th><th>Status</th><th>Attendance</th><th>Payment</th><th /></tr></thead>
+              <tbody>
+                {list.map((s) => {
+                  const st = SESSION[s.status];
+                  const pay = PAYMENT[s.payment.status];
+                  return (
+                    <tr key={s.id}>
+                      <td className="nowrap">{fmtDate(s.date)} · {fmtTime(s.time)}</td>
+                      <td><div style={{ fontWeight: 600 }}>{s.learner}</div><div className="muted" style={{ fontSize: 12 }}>to {s.tutor}</div></td>
+                      <td><div>{s.subject}</div><div className="muted ellipsis" style={{ fontSize: 12, maxWidth: 240 }}>{s.log?.topics || s.topic}</div></td>
+                      <td><Tag tone={st.tone} size="sm">{st.label}</Tag></td>
+                      <td>{s.log?.attendance ? <Tag tone={ATTENDANCE[s.log.attendance].tone} size="sm">{ATTENDANCE[s.log.attendance].label}</Tag> : '—'}</td>
+                      <td><Tag tone={pay.tone} size="sm">{pay.label}</Tag></td>
+                      <td style={{ textAlign: 'right' }}><button className="btn btn-secondary btn-xs" onClick={() => setDetails(s)}>Details</button></td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+      {details && <SessionDetailsModal session={details} onClose={() => setDetails(null)} />}
     </section>
   );
 }

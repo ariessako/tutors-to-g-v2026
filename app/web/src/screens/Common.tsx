@@ -401,6 +401,7 @@ export function ParentProgress() {
                   <div className="row wrap" style={{ gap: 6, justifyContent: 'flex-end' }}>
                     <Tag tone={st.tone}>{st.label}</Tag>
                     {(r.status === 'accepted' || r.status === 'completed') && <PayTag x={r} />}
+                    <button className="btn btn-ghost btn-sm" onClick={() => setModal({ type: 'details', session: r })}>Details</button>
                   </div>
                 </div>
               );

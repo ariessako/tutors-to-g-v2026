@@ -5,6 +5,7 @@ import { eq } from 'drizzle-orm';
 import request from 'supertest';
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { createApp } from '../server/app';
+import { close, serve } from './serve';
 import { hashPassword } from '../server/auth';
 import { openDb } from '../server/db';
 import { applications, tutoringSessions, users } from '../server/db/schema';
@@ -12,7 +13,7 @@ import { iso, slotDate } from '../shared/format';
 import type { SessionStatus } from '../shared/types';
 
 let db: ReturnType<typeof openDb>;
-let app: ReturnType<typeof createApp>['app'];
+let app: ReturnType<typeof serve>;
 let dir: string;
 let passwordHash: string;
 const date = (slot = 'Mon 09:00') => iso(slotDate(slot));
@@ -26,9 +27,10 @@ beforeEach(() => {
     db.insert(users).values({ id, role, name: id, email: `${id}@example.test`, passwordHash, joined: '2026-01-01', profile, rate: 400, slots: ['Mon 08:00', 'Mon 09:00', 'Mon 10:00', 'Mon 11:00', 'Mon 12:00', 'Tue 09:00'] }).run();
     if (role === 'teacher') db.insert(applications).values({ userId: id, status: 'approved' }).run();
   }
-  app = createApp({ db, uploadsDir: join(dir, 'uploads'), demo: false }).app;
+  app = serve(createApp({ db, uploadsDir: join(dir, 'uploads'), demo: false }).app);
 });
-afterEach(() => {
+afterEach(async () => {
+  await close(app);
   db.$client.close();
   rmSync(dir, { recursive: true, force: true });
 });
@@ -159,7 +161,7 @@ describe('instructor confirmation conflicts', () => {
   it('does not reopen a confirmed interval after early completion', async () => {
     legacy('existing', 'accepted');
     const tutor = await as('t1');
-    expect((await tutor.post('/api/sessions/existing/complete')).status).toBe(200);
+    expect((await tutor.post('/api/sessions/existing/complete').send({ attendance: 'present', topics: 'Fractions review' })).status).toBe(200);
     const student = await as('s2');
     expect((await student.post('/api/sessions').send(payload())).status).toBe(409);
     legacy('request', 'pending', 't1', 's2', 'Mon 09:00', 1);
@@ -168,8 +170,8 @@ describe('instructor confirmation conflicts', () => {
 
   it.each(['tutor', 'student'] as const)('allows competing requests but only one confirmation for a %s conflict across database connections', async (kind) => {
     const secondDb = openDb(join(dir, 'test.db'));
+    const otherApp = serve(createApp({ db: secondDb, uploadsDir: join(dir, 'uploads'), demo: false }).app);
     try {
-      const otherApp = createApp({ db: secondDb, uploadsDir: join(dir, 'uploads'), demo: false }).app;
       const first = await as('s1');
       const second = await as(kind === 'tutor' ? 's2' : 's1', otherApp);
       const requests = await Promise.all([
@@ -186,7 +188,7 @@ describe('instructor confirmation conflicts', () => {
       expect(confirmations.map((r) => r.status).sort()).toEqual([200, 409]);
       // The losing request overlaps the winner, so for the same tutor it is declined automatically.
       expect(db.select().from(tutoringSessions).all().map((s) => s.status).sort()).toEqual(['accepted', kind === 'tutor' ? 'declined' : 'pending']);
-    } finally { secondDb.$client.close(); }
+    } finally { await close(otherApp); secondDb.$client.close(); }
   });
 
   it('still validates schedule dates and duration choices', async () => {

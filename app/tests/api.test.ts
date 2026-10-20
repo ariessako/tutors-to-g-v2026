@@ -5,10 +5,11 @@ import request from 'supertest';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { openDb } from '../server/db';
 import { createApp } from '../server/app';
+import { close, serve } from './serve';
 import { seedDemo } from '../server/seed';
 import { TERMS_VERSION } from '../shared/terms';
 
-let app: ReturnType<typeof createApp>['app'];
+let app: ReturnType<typeof serve>;
 let uploads: string;
 const PDF = Buffer.from('%PDF-1.4\n%test\n');
 
@@ -16,7 +17,7 @@ beforeAll(async () => {
   uploads = mkdtempSync(join(tmpdir(), 'ttg-test-'));
   const db = openDb(':memory:');
   await seedDemo(db, uploads);
-  app = createApp({ db, uploadsDir: uploads, demo: true }).app;
+  app = serve(createApp({ db, uploadsDir: uploads, demo: true }).app);
 });
 afterAll(() => rmSync(uploads, { recursive: true, force: true }));
 
@@ -227,6 +228,34 @@ describe('tutor application', () => {
 
     const lab = await admin.get('/api/lab');
     expect(lab.body.people.some((p: { id: string }) => p.id === 't_jen')).toBe(true);
+  });
+});
+
+describe('session log', () => {
+  it('records attendance, topics and notes when a tutor completes a session, with a timeline and CSV export', async () => {
+    const paolo = await as('paolo.reyes@tutor.ph');
+    const upcoming = (await paolo.get('/api/sessions')).body.sessions.find((s: { status: string; learner: string }) => s.status === 'accepted' && s.learner.startsWith('Bea'));
+    expect((await paolo.post(`/api/sessions/${upcoming.id}/complete`).send({ attendance: 'present' })).status).toBe(400);
+    const done = await paolo.post(`/api/sessions/${upcoming.id}/complete`).send({ attendance: 'late', actualHours: 1.25, topics: 'Factoring by grouping', notes: 'Homework: p. 42 items 1-8' });
+    expect(done.status).toBe(200);
+    const bea = await as('bea@student.ph');
+    const mine = (await bea.get('/api/sessions')).body.sessions.find((s: { id: string }) => s.id === upcoming.id);
+    expect(mine.log).toMatchObject({ attendance: 'late', actualHours: 1.25, topics: 'Factoring by grouping', notes: 'Homework: p. 42 items 1-8' });
+    const kinds = mine.events.map((e: { kind: string }) => e.kind);
+    expect(kinds.slice(0, 2)).toEqual(['requested', 'accepted']);
+    expect(kinds.at(-1)).toBe('completed');
+    expect(mine.events.at(-1)).toMatchObject({ by: 'Paolo Reyes', detail: 'Student was late' });
+    const liza = await as('liza@parent.ph');
+    expect((await liza.get('/api/parent/progress')).body.sessions.find((s: { id: string }) => s.id === upcoming.id).log.notes).toBe('Homework: p. 42 items 1-8');
+
+    const admin = await as('admin@tutorstogo.ph');
+    const logged = (await admin.get('/api/admin/sessions?status=completed')).body.sessions;
+    expect(logged.every((s: { status: string }) => s.status === 'completed')).toBe(true);
+    const csv = await admin.get('/api/admin/sessions.csv?status=completed');
+    expect(csv.headers['content-type']).toMatch(/text\/csv/);
+    expect(csv.text.split('\r\n')[0]).toMatch(/^"Date","Time"/);
+    expect(csv.text).toContain('"Factoring by grouping"');
+    expect((await bea.get('/api/admin/sessions')).status).toBe(403);
   });
 });
 

@@ -6,18 +6,21 @@ import { SUBJECTS, WEEK } from '../../../shared/vocab';
 import { api, useAction, useApi } from '../api';
 import { PAYMENT, SESSION, type LinkView } from '../labels';
 import { BookModal, PayModal, RateModal } from '../modals/StudentModals';
+import { SessionDetailsModal } from '../modals/SessionModals';
 import type { MatchesResponse, SessionView, StudentHome as Home, TutorCard, TutorProfileResponse } from '../types';
 import { Avatar, Bar, CardHead, DateTile, ErrorBox, Icon, Loading, MatchRing, PageHead, Seg, Stat, Tag, useToast } from '../ui';
 
 export type StudentModal =
   | { type: 'book'; tutorId: string }
   | { type: 'pay'; session: SessionView }
-  | { type: 'rate'; tutorId: string; tutorName: string; sessionId?: string };
+  | { type: 'rate'; tutorId: string; tutorName: string; sessionId?: string }
+  | { type: 'details'; session: SessionView };
 
 export function StudentModals({ modal, onClose }: { modal: StudentModal | null; onClose: () => void }) {
   if (!modal) return null;
   if (modal.type === 'book') return <BookModal tutorId={modal.tutorId} onClose={onClose} />;
   if (modal.type === 'pay') return <PayModal session={modal.session} onClose={onClose} />;
+  if (modal.type === 'details') return <SessionDetailsModal session={modal.session} onClose={onClose} />;
   return <RateModal tutorId={modal.tutorId} tutorName={modal.tutorName} sessionId={modal.sessionId} onClose={onClose} />;
 }
 
@@ -492,6 +495,7 @@ export function StudentSessions() {
                     <button className="btn btn-secondary btn-sm" onClick={() => setModal({ type: 'rate', tutorId: r.tutorId, tutorName: r.tutor, sessionId: r.id })}><Icon name="star" />Rate</button>
                   )}
                   {r.rated > 0 && <span className="muted" style={{ fontSize: 12 }}>You rated ★ {r.rated}</span>}
+                  <button className="btn btn-ghost btn-sm" onClick={() => setModal({ type: 'details', session: r })}>Details</button>
                 </div>
               </div>
             );

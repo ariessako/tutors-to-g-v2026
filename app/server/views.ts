@@ -1,7 +1,7 @@
 /** Shapes database rows into the JSON the web client renders. */
 import { eq, inArray } from 'drizzle-orm';
 import type { Db } from './db';
-import { applications, reviews, tutoringSessions, users } from './db/schema';
+import { applications, reviews, sessionEvents, tutoringSessions, users } from './db/schema';
 import type { User } from './auth';
 import type { Me } from '../shared/types';
 import { sortSlots } from '../shared/format';
@@ -48,7 +48,9 @@ export function nameMap(db: Db, ids: (string | null | undefined)[]) {
 }
 
 export function sessionViews(db: Db, rows: SessionRow[]) {
-  const who = nameMap(db, rows.flatMap((r) => [r.studentId, r.tutorId]));
+  const ids = rows.map((r) => r.id);
+  const events = ids.length ? db.select().from(sessionEvents).where(inArray(sessionEvents.sessionId, ids)).all() : [];
+  const who = nameMap(db, [...rows.flatMap((r) => [r.studentId, r.tutorId]), ...events.map((e) => e.actorId)]);
   return rows.map((r) => ({
     id: r.id,
     studentId: r.studentId,
@@ -68,6 +70,13 @@ export function sessionViews(db: Db, rows: SessionRow[]) {
     declineReason: r.declineReason,
     amount: r.amount,
     rated: r.rated,
+    log: r.completedAt
+      ? { attendance: r.attendance, actualHours: r.actualHours, topics: r.topicsCovered ?? '', notes: r.sessionNotes ?? '', completedAt: r.completedAt }
+      : null,
+    events: events
+      .filter((e) => e.sessionId === r.id)
+      .sort((a, b) => (a.at < b.at ? -1 : a.at > b.at ? 1 : a.id - b.id))
+      .map((e) => ({ at: e.at, kind: e.kind, by: e.actorId ? who(e.actorId).name : null, detail: e.detail })),
     payment: {
       status: r.paymentStatus,
       reference: r.paymentRef,

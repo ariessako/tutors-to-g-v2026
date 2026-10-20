@@ -5,8 +5,8 @@ import { z } from 'zod';
 import { applicationDocs, applicationHistory, applications, authSessions, parentLinks, reviews, settings, tutoringSessions, users } from '../db/schema';
 import { HttpError, hashPassword, requireUser } from '../auth';
 import { emailSchema, profileSchema, tutorDetailsSchema, type Ctx } from '../context';
-import { nowIso, uid } from '../services';
-import { nameMap, reviewViews } from '../views';
+import { logEvent, nowIso, uid } from '../services';
+import { nameMap, reviewViews, sessionViews } from '../views';
 import { iso } from '../../shared/format';
 import { DOC_KINDS } from '../../shared/vocab';
 import type { AppStatus } from '../../shared/types';
@@ -236,7 +236,41 @@ export function adminRoutes(ctx: Ctx) {
     const s = db.select().from(tutoringSessions).where(eq(tutoringSessions.id, req.params.id)).get();
     if (!s || s.paymentStatus !== 'for_review') throw new HttpError(409, 'This receipt isn’t waiting for review.');
     db.update(tutoringSessions).set({ paymentStatus: approve ? 'paid' : 'rejected', reviewedAt: nowIso() }).where(eq(tutoringSessions.id, s.id)).run();
+    logEvent(db, s.id, approve ? 'payment_approved' : 'payment_rejected', requireUser(req, 'admin').id);
     res.json({ ok: true, tutor: nameMap(db, [s.tutorId])(s.tutorId).name });
+  });
+
+  // Session log
+  const sessionFilter = z.object({
+    from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+    to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+    status: z.enum(['pending', 'accepted', 'declined', 'completed']).optional(),
+  });
+  function loggedSessions(query: unknown) {
+    const f = sessionFilter.parse(query);
+    const rows = db.select().from(tutoringSessions).all()
+      .filter((s) => (!f.from || s.date >= f.from) && (!f.to || s.date <= f.to) && (!f.status || s.status === f.status))
+      .sort((a, b) => (a.date + a.slot.split(' ')[1] < b.date + b.slot.split(' ')[1] ? 1 : -1));
+    return sessionViews(db, rows);
+  }
+
+  r.get('/admin/sessions', (req, res) => {
+    res.json({ sessions: loggedSessions(req.query) });
+  });
+
+  r.get('/admin/sessions.csv', (req, res) => {
+    const cell = (v: unknown) => {
+      const s = v == null ? '' : String(v);
+      // Quote every cell; a leading formula character is neutralised so spreadsheets don't execute it.
+      return `"${(/^[=+\-@]/.test(s) ? `'${s}` : s).replace(/"/g, '""')}"`;
+    };
+    const head = ['Date', 'Time', 'Booked hours', 'Actual hours', 'Student', 'Tutor', 'Subject', 'Mode', 'Status', 'Attendance', 'Topics covered', 'Notes', 'Amount', 'Payment', 'Completed at'];
+    const lines = loggedSessions(req.query).map((s) =>
+      [s.date, s.time, s.hours, s.log?.actualHours, s.learner, s.tutor, s.subject, s.mode, s.status, s.log?.attendance, s.log?.topics, s.log?.notes, s.amount, s.payment.status, s.log?.completedAt].map(cell).join(','),
+    );
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', 'attachment; filename="tutors-to-go-sessions.csv"');
+    res.send([head.map(cell).join(','), ...lines].join('\r\n'));
   });
 
   // Feedback moderation (admins see who wrote anonymous reviews)

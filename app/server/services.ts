@@ -1,9 +1,9 @@
 import { randomBytes } from 'node:crypto';
 import { and, eq } from 'drizzle-orm';
 import type { Db } from './db';
-import { applications, parentLinks, reviews, settings as settingsTable, users } from './db/schema';
+import { applications, parentLinks, reviews, sessionEvents, settings as settingsTable, users } from './db/schema';
 import { cluster, matchesFor, type ClusterResult, type PersonInput } from '../shared/matching';
-import type { Settings } from '../shared/types';
+import type { SessionEventKind, Settings } from '../shared/types';
 
 export const uid = (prefix: string) => prefix + randomBytes(6).toString('base64url');
 export const nowIso = () => new Date().toISOString();
@@ -11,6 +11,11 @@ export const nowIso = () => new Date().toISOString();
 /** Students a parent may follow: those whose link the student and an admin approved. */
 export const childIdsOf = (db: Db, parentId: string) =>
   db.select({ id: parentLinks.studentId }).from(parentLinks).where(and(eq(parentLinks.parentId, parentId), eq(parentLinks.status, 'approved'))).all().map((l) => l.id);
+
+/** Appends an entry to a session's timeline. Pass the transaction when inside one. */
+export function logEvent(db: Pick<Db, 'insert'>, sessionId: string, kind: SessionEventKind, actorId: string | null, detail = '') {
+  db.insert(sessionEvents).values({ sessionId, kind, actorId, detail, at: nowIso() }).run();
+}
 
 export const DEFAULT_SETTINGS: Settings = { k: 4, seed: 7, init: 'kmeans++', approach: 'joint' };
 
