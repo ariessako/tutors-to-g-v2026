@@ -49,6 +49,11 @@ export const DOC_KINDS = [
   { key: 'prc', label: 'PRC license', hint: 'Professional Regulation Commission ID or certificate, front and back' },
   { key: 'birth', label: 'PSA birth certificate', hint: 'Issued by the Philippine Statistics Authority' },
   { key: 'tor', label: 'Transcript of Records', hint: 'Official copy from your college or university' },
+  { key: 'diploma', label: 'Diploma or certificate of enrollment', hint: 'Your college diploma, or a current certificate of enrollment if you are still studying' },
 ] as const;
 export type DocKind = (typeof DOC_KINDS)[number]['key'];
+
+/** Documents an applicant uploads: licensed tutors send the PRC license, non-licensed tutors a diploma or enrollment certificate. */
+export const docKindsFor = (license: 'licensed' | 'non_licensed' | null | undefined) =>
+  DOC_KINDS.filter((d) => d.key !== (license === 'non_licensed' ? 'prc' : 'diploma'));
 

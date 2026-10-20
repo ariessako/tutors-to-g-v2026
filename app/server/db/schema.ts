@@ -12,6 +12,7 @@ import type {
   UserStatus,
 } from '../../shared/types';
 import type { CriterionKey } from '../../shared/vocab';
+import type { Eligibility, LicenseType } from '../../shared/tiers';
 
 export const users = sqliteTable('users', {
   id: text('id').primaryKey(),
@@ -30,6 +31,8 @@ export const users = sqliteTable('users', {
   // Students and tutors
   profile: text('profile', { mode: 'json' }).$type<Profile>(),
   // Tutors
+  licenseType: text('license_type').$type<LicenseType>(),
+  eligibility: text('eligibility').$type<Eligibility>(),
   headline: text('headline'),
   bio: text('bio'),
   rate: integer('rate'),

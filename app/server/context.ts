@@ -9,6 +9,7 @@ import { HttpError } from './auth';
 import { nowIso, uid } from './services';
 import { CURRICULA, GRADES, HOBBIES, LEARNING, METHODS, SCHED, SUBJECTS } from '../shared/vocab';
 import { validateProfile } from '../shared/matching';
+import { rateError, type Eligibility, type LicenseType } from '../shared/tiers';
 
 export interface Ctx {
   db: Db;
@@ -63,13 +64,24 @@ export const profileSchema = z
   });
 
 export const tutorDetailsSchema = z.object({
+  licenseType: z.enum(['licensed', 'non_licensed']).default('licensed'),
+  eligibility: z.enum(['degree', 'student']).nullable().default(null),
   headline: z.string().trim().max(120).default(''),
-  rate: z.number().int().min(100, 'Set a rate of at least ₱100 per hour.').max(10_000),
+  rate: z.number().int().min(1).max(10_000),
   years: z.number().int().min(0).max(60),
   education: z.string().trim().max(200).default(''),
   curricula: z.array(oneOf(CURRICULA)).default([]),
   method: oneOf(METHODS),
   bio: z.string().trim().max(2000).default(''),
 });
+
+/** Checks a tutor's licence, eligibility and rate together; throws a 400 on the first problem. */
+export function checkTutor(t: { licenseType?: LicenseType; eligibility?: Eligibility | null; years?: number; rate?: number }) {
+  if (t.licenseType === 'non_licensed' && !t.eligibility) throw new HttpError(400, 'Choose how you meet the eligibility rules for non-licensed tutors.');
+  if (t.rate !== undefined) {
+    const err = rateError(t.licenseType ?? 'licensed', t.years ?? 0, t.rate);
+    if (err) throw new HttpError(400, err);
+  }
+}
 
 export const emailSchema = z.string().trim().toLowerCase().regex(/^\S+@\S+\.\S+$/, 'Enter a valid email address.');

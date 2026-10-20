@@ -57,6 +57,13 @@
       "when": 1792491539164,
       "tag": "0007_warnings",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1792491650840,
+      "tag": "0008_tutor_license",
+      "breakpoints": true
     }
   ]
 }

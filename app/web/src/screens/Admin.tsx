@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router';
 import type { AppStatus, PaymentStatus, Profile, TutorDetails } from '../../../shared/types';
 import { validateProfile } from '../../../shared/matching';
 import { WARNING_LIMIT } from '../../../shared/vocab';
+import { ELIGIBILITY, RATE_TIERS, tierFor, type Eligibility, type LicenseType } from '../../../shared/tiers';
 import { fmtDate, fmtStamp, fmtTime, peso, stars } from '../../../shared/format';
 import { api, useAction, useApi } from '../api';
 import { APPLICATION, LINK, PAYMENT, REVIEW, SESSION, type LinkView } from '../labels';
@@ -133,6 +134,9 @@ interface AppDetail {
   curricula: string[];
   method: string;
   rate: number;
+  licenseType: LicenseType;
+  eligibility: Eligibility | null;
+  years: number;
   termsVersion: string | null;
   termsAcceptedAt: string | null;
   status: AppStatus;
@@ -234,7 +238,8 @@ function ApplicationPanel({ id }: { id: string }) {
     ['Lesson approach', a.method || '—'],
     ['Teaches best', p?.learning || '—'],
     ['Hobbies', [p?.hobbies.join(', '), p?.interests].filter(Boolean).join(' · ') || '—'],
-    ['Rate', `${peso(a.rate)}/hr`],
+    ['License', a.licenseType === 'licensed' ? 'Licensed (LPT) · upload PRC license' : `Non-licensed · ${a.eligibility ? ELIGIBILITY[a.eligibility].label : 'eligibility not stated'}`],
+    ['Rate', `${peso(a.rate)}/hr · ${RATE_TIERS[tierFor(a.licenseType, a.years)].label} band ₱${RATE_TIERS[tierFor(a.licenseType, a.years)].min}–₱${RATE_TIERS[tierFor(a.licenseType, a.years)].max.toLocaleString('en-US')}`],
     ['Terms', a.termsVersion ? `Accepted version ${a.termsVersion}${a.termsAcceptedAt ? ` on ${fmtStamp(a.termsAcceptedAt)}` : ''}` : 'Not accepted'],
   ];
   return (

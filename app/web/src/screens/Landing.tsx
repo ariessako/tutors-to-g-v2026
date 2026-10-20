@@ -3,13 +3,14 @@ import type { Me, Role } from '../../../shared/types';
 import { validateProfile } from '../../../shared/matching';
 import { nextDate } from '../../../shared/format';
 import { TermsModal } from './Terms';
+import { ELIGIBILITY, LICENSE_LABEL, RATE_TIERS, type Eligibility, type LicenseType } from '../../../shared/tiers';
 import { api, useAction, useApi } from '../api';
 import { ProfileFields, readProfile, readTutor } from '../ProfileFields';
 import { homePath } from '../Shell';
 import { Avatar, ErrorBox, Field, flash, Icon, MatchRing, Seg, useTheme, useToast } from '../ui';
 
 type SignupRole = Exclude<Role, 'admin'>;
-interface Step1 { name: string; email: string; password: string; gradeLabel: string; school: string; childEmail: string }
+interface Step1 { name: string; email: string; password: string; gradeLabel: string; school: string; childEmail: string; licenseType: LicenseType; eligibility: Eligibility | '' }
 
 const FEATURES = [
   { icon: 'user-focus', title: 'Build your profile', text: 'Hobbies, learning style, personality, subjects, schedule.' },
@@ -179,7 +180,8 @@ function Signup() {
   const [role, setRole] = useState<SignupRole>('student');
   const [step, setStep] = useState<1 | 2>(1);
   const [showTerms, setShowTerms] = useState(false);
-  const [data, setData] = useState<Step1>({ name: '', email: '', password: '', gradeLabel: '', school: '', childEmail: '' });
+  const [data, setData] = useState<Step1>({ name: '', email: '', password: '', gradeLabel: '', school: '', childEmail: '', licenseType: 'licensed', eligibility: '' });
+  const [license, setLicense] = useState<LicenseType>('licensed');
   const { run, error, setError, busy } = useAction();
 
   type SignupResult = { me: Me; requested: boolean; cluster: { no: number; count: number } | null };
@@ -211,7 +213,10 @@ function Signup() {
       gradeLabel: String(fd.get('gradeLabel') ?? ''),
       school: String(fd.get('school') ?? ''),
       childEmail: String(fd.get('childEmail') ?? ''),
+      licenseType: license,
+      eligibility: license === 'non_licensed' ? (String(fd.get('eligibility') ?? '') as Eligibility | '') : '',
     };
+    if (role === 'teacher' && d.licenseType === 'non_licensed' && !d.eligibility) return setError('Choose how you meet the eligibility rules for non-licensed tutors.');
     if (!d.name || !d.email || !d.password) return setError('Fill in your name, email and password.');
     if (!/^\S+@\S+\.\S+$/.test(d.email)) return setError('Enter a valid email address.');
     if (d.password.length < 6) return setError('Use at least 6 characters for your password.');
@@ -254,7 +259,7 @@ function Signup() {
               : 'K-means uses this to find tutors like you. You can change it later.'}
           </p>
         </div>
-        <ProfileFields mode={role === 'teacher' ? 'tutor' : 'student'} details={role === 'teacher'} />
+        <ProfileFields mode={role === 'teacher' ? 'tutor' : 'student'} details={role === 'teacher'} tutor={role === 'teacher' ? { licenseType: data.licenseType, eligibility: data.eligibility || null } : undefined} />
         {role === 'teacher' && (
           <label style={{ display: 'flex', gap: 10, alignItems: 'flex-start', cursor: 'pointer', fontSize: 14 }}>
             <input type="checkbox" name="acceptTerms" style={{ accentColor: 'var(--color-accent)', marginTop: 4 }} />
@@ -314,9 +319,25 @@ function Signup() {
         </>
       )}
       {role === 'teacher' && (
-        <p className="muted" style={{ fontSize: 12 }}>
-          Next: your teaching profile. Then you’ll upload your PRC license, PSA birth certificate, transcript of records and a demo video for admin review.
-        </p>
+        <>
+          <div className="field">
+            <span className="label">Teaching license</span>
+            <Seg label="Teaching license" value={license} onChange={setLicense} options={[{ value: 'licensed', label: LICENSE_LABEL.licensed }, { value: 'non_licensed', label: LICENSE_LABEL.non_licensed }]} />
+          </div>
+          {license === 'non_licensed' && (
+            <Field label="I’m eligible as a">
+              <select className="input" name="eligibility" defaultValue={data.eligibility}>
+                <option value="">Choose one</option>
+                {(Object.keys(ELIGIBILITY) as Eligibility[]).map((k) => <option key={k} value={k}>{ELIGIBILITY[k].label}</option>)}
+              </select>
+            </Field>
+          )}
+          <p className="muted" style={{ fontSize: 12 }}>
+            {license === 'licensed'
+              ? `Next: your teaching profile. Then you’ll upload your PRC license, PSA birth certificate, transcript of records and a demo video. Licensed teachers charge ₱${RATE_TIERS.licensed.min}–₱${RATE_TIERS.licensed_senior.max.toLocaleString('en-US')} an hour depending on experience.`
+              : `Next: your teaching profile. Then you’ll upload a diploma or certificate of enrollment, PSA birth certificate, transcript of records and a demo video. Non-licensed tutors charge ₱${RATE_TIERS.non_licensed.min}–₱${RATE_TIERS.non_licensed.max} an hour.`}
+          </p>
+        </>
       )}
       <ErrorBox error={error} />
       <button type="submit" className="btn btn-primary btn-lg" disabled={busy}>{role === 'parent' ? 'Create account' : 'Continue'}</button>

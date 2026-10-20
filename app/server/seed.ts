@@ -11,10 +11,11 @@ import * as t from './db/schema';
 import { hashPassword } from './auth';
 import { DEFAULT_SETTINGS } from './services';
 import { TERMS_VERSION } from '../shared/terms';
+import { clampRate } from '../shared/tiers';
 import { mockPdf } from './mockPdf';
 import { rng } from '../shared/matching';
 import { addDays, iso, nextDate } from '../shared/format';
-import { CURRICULA, DOC_KINDS, HOBBIES, LEARNING, METHODS, SCHED, SUBJECTS } from '../shared/vocab';
+import { CURRICULA, docKindsFor, HOBBIES, LEARNING, METHODS, SCHED, SUBJECTS } from '../shared/vocab';
 import type { AppStatus, Profile } from '../shared/types';
 
 export const DEMO_PASSWORD = 'demo123';
@@ -159,10 +160,10 @@ export async function seedDemo(db: Db, uploadsDir: string, today = new Date()) {
 
   userRows.push(base('admin', 'admin', 'Registrar Admin', 'admin@tutorstogo.ph', 265));
 
-  const DOC_FILE: Record<string, string> = { prc: 'PRC-license', birth: 'PSA-birth-certificate', tor: 'TOR' };
+  const DOC_FILE: Record<string, string> = { prc: 'PRC-license', birth: 'PSA-birth-certificate', tor: 'TOR', diploma: 'Diploma-or-COE' };
   function addDocs(id: string, nm: string, uploadedDaysAgo: number) {
     const s = slug(nm);
-    for (const d of DOC_KINDS) {
+    for (const d of docKindsFor(userRows.find((u) => u.id === id)?.licenseType)) {
       const fileName = `${DOC_FILE[d.key]}-${s}.pdf`;
       const fileId = mockFile(id, fileName, stampAgo(uploadedDaysAgo, 10), d.label, [`Name: ${nm}`, `Document: ${d.label}`, `Reference no.: ${d.key.toUpperCase()}-${id.toUpperCase()}-2026`]);
       docRows.push({ userId: id, kind: d.key, fileName, fileId });
@@ -192,6 +193,11 @@ export async function seedDemo(db: Db, uploadsDir: string, today = new Date()) {
       ...extra,
     };
     row.termsAcceptedAt = new Date(`${row.joined}T09:00:00`).toISOString();
+    row.licenseType ??= 'licensed';
+    if (row.licenseType === 'non_licensed')
+      row.bio = `${row.eligibility === 'student' ? 'College student tutor' : 'College graduate tutoring'} for ${years} year${years > 1 ? 's' : ''}. Plans lessons around the ${method} and follows the ${curricula[0]}. Off the clock: ${profile.hobbies.join(', ').toLowerCase()}.`;
+    // Seeded rates follow the rate band for the tutor's tier.
+    row.rate = clampRate(row.licenseType, row.years ?? 0, row.rate ?? 0);
     userRows.push(row);
     return row;
   }
@@ -224,7 +230,8 @@ export async function seedDemo(db: Db, uploadsDir: string, today = new Date()) {
   approve(paolo.id, paolo.name);
   for (let i = 0; i < 39; i++) {
     const nm = name();
-    tutor(`t${i}`, nm, gen(ARCH[i % 4], true));
+    // Every fifth tutor is non-licensed, alternating graduates and college students.
+    tutor(`t${i}`, nm, gen(ARCH[i % 4], true), i % 5 === 4 ? { licenseType: 'non_licensed', eligibility: i % 2 ? 'student' : 'degree' } : {});
     approve(`t${i}`, nm);
   }
 
@@ -243,7 +250,7 @@ export async function seedDemo(db: Db, uploadsDir: string, today = new Date()) {
     education: EDU.English,
   }, 'jen@tutor.ph');
   applicant('t_a1', name(), 'pending', '', true);
-  applicant('t_a2', name(), 'pending', '', true);
+  applicant('t_a2', name(), 'pending', '', true, { licenseType: 'non_licensed', eligibility: 'student' });
   applicant('t_a3', name(), 'needs_changes', 'TOR scan is blurry. Please upload a clearer copy.', true);
 
   const student = (id: string, nm: string, profile: Profile, extra: Partial<UserRow> = {}) => {

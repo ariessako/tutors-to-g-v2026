@@ -4,11 +4,11 @@ import { and, eq, isNull, ne, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { applicationDocs, applicationHistory, applications, authSessions, parentLinks, reviews, settings, tutoringSessions, users, warnings } from '../db/schema';
 import { HttpError, hashPassword, requireUser } from '../auth';
-import { emailSchema, profileSchema, tutorDetailsSchema, type Ctx } from '../context';
+import { checkTutor, emailSchema, profileSchema, tutorDetailsSchema, type Ctx } from '../context';
 import { logEvent, nowIso, uid } from '../services';
 import { nameMap, reviewViews, sessionViews } from '../views';
 import { iso } from '../../shared/format';
-import { DOC_KINDS } from '../../shared/vocab';
+import { docKindsFor } from '../../shared/vocab';
 import type { AppStatus } from '../../shared/types';
 
 export function adminRoutes(ctx: Ctx) {
@@ -91,7 +91,10 @@ export function adminRoutes(ctx: Ctx) {
         status: a.status,
         note: a.note,
         video: a.video ?? '',
-        docs: DOC_KINDS.map((d) => {
+        licenseType: u.licenseType ?? 'licensed',
+        eligibility: u.eligibility,
+        years: u.years ?? 0,
+        docs: docKindsFor(u.licenseType).map((d) => {
           const f = docs.find((x) => x.kind === d.key);
           return { kind: d.key, label: d.label, fileName: f?.fileName ?? null, fileId: f?.fileId ?? null };
         }),
@@ -157,6 +160,7 @@ export function adminRoutes(ctx: Ctx) {
   r.post('/admin/tutors', async (req, res) => {
     const d = tutorBody.parse(req.body);
     if (!d.tutor.curricula.length) throw new HttpError(400, 'Pick at least one curriculum the tutor is familiar with.');
+    checkTutor(d.tutor);
     if (emailTaken(d.email)) throw new HttpError(409, 'Another account uses this email.');
     const id = uid('t_');
     // New tutors get a one-time temporary password the admin shares with them.
@@ -175,6 +179,7 @@ export function adminRoutes(ctx: Ctx) {
     const u = db.select().from(users).where(and(eq(users.id, req.params.id), eq(users.role, 'teacher'))).get();
     if (!u) throw new HttpError(404, 'Tutor not found.');
     if (!d.tutor.curricula.length) throw new HttpError(400, 'Pick at least one curriculum the tutor is familiar with.');
+    checkTutor(d.tutor);
     if (emailTaken(d.email, u.id)) throw new HttpError(409, 'Another account uses this email.');
     db.update(users).set({ name: d.name, email: d.email, profile: d.profile, ...d.tutor }).where(eq(users.id, u.id)).run();
     res.json({ ok: true });

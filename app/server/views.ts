@@ -14,6 +14,8 @@ export function meDto(db: Db, u: User): Me {
   if (u.role === 'teacher') {
     const app = db.select({ status: applications.status }).from(applications).where(eq(applications.userId, u.id)).get();
     tutor = {
+      licenseType: u.licenseType ?? 'licensed',
+      eligibility: u.eligibility ?? null,
       headline: u.headline ?? '',
       rate: u.rate ?? 0,
       years: u.years ?? 0,

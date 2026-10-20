@@ -2,7 +2,7 @@ import { useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router';
 import type { Me } from '../../../shared/types';
 import { fmtDate, fmtStamp, fmtTime, hoursLabel, peso, stars } from '../../../shared/format';
-import { DOC_KINDS, SCHEDULE_HOURS, WEEK } from '../../../shared/vocab';
+import { SCHEDULE_HOURS, WEEK, docKindsFor } from '../../../shared/vocab';
 import { api, useAction, useApi } from '../api';
 import { BarChart } from '../charts';
 import { APPLICATION } from '../labels';
@@ -25,7 +25,7 @@ export function TutorHome({ me }: { me: Me }) {
     <section className="page">
       {approved && <TutorDashboard me={me} />}
       {approved && <h2 style={{ fontSize: 22, marginTop: 8 }}>Documents</h2>}
-      <Application />
+      <Application me={me} />
     </section>
   );
 }
@@ -119,7 +119,8 @@ const INTRO: Record<ApplicationView['status'], string> = {
 };
 const STEP_INDEX: Record<ApplicationView['status'], number> = { draft: 1, pending: 2, needs_changes: 1, rejected: 1, approved: 4 };
 
-function Application() {
+function Application({ me }: { me: Me }) {
+  const kinds = docKindsFor(me.tutor?.licenseType);
   const q = useApi<{ application: ApplicationView }>('/me/application');
   const [picked, setPicked] = useState<Record<string, File>>({});
   const [formKey, setFormKey] = useState(0);
@@ -134,7 +135,7 @@ function Application() {
   async function submit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const video = String(new FormData(e.currentTarget).get('video') ?? '').trim();
-    const missing = DOC_KINDS.filter((d) => !picked[d.key] && !a.docs[d.key]).map((d) => d.label);
+    const missing = kinds.filter((d) => !picked[d.key] && !a.docs[d.key]).map((d) => d.label);
     if (missing.length) return setError(`Still missing: ${missing.join(', ')}.`);
     if (!/^https?:\/\/\S+\.\S+/.test(video)) return setError('Add a valid video demo link starting with https://');
     const form = new FormData();
@@ -172,7 +173,7 @@ function Application() {
         </div>
       )}
       <form key={formKey} onSubmit={submit} className="card" style={{ display: 'flex', flexDirection: 'column', maxWidth: 960 }}>
-        {DOC_KINDS.map((d) => {
+        {kinds.map((d) => {
           const f = picked[d.key];
           const cur = a.docs[d.key];
           return (

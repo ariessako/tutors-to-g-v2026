@@ -7,7 +7,7 @@ import { saveFile, type Ctx } from '../context';
 import { nowIso } from '../services';
 import { reviewViews, sessionViews } from '../views';
 import { addDays, iso, sortSlots } from '../../shared/format';
-import { DOC_KINDS, SCHEDULE_HOURS, WEEK } from '../../shared/vocab';
+import { DOC_KINDS, SCHEDULE_HOURS, WEEK, docKindsFor } from '../../shared/vocab';
 
 const VALID_SLOTS = new Set(WEEK.flatMap((d) => SCHEDULE_HOURS.map((h) => `${d} ${h}`)));
 
@@ -93,10 +93,11 @@ export function teacherRoutes(ctx: Ctx) {
         .parse(req.body);
       const uploaded = (req.files ?? {}) as Record<string, Express.Multer.File[]>;
       const existing = new Set(db.select({ kind: applicationDocs.kind }).from(applicationDocs).where(eq(applicationDocs.userId, me.id)).all().map((d) => d.kind));
-      const missing = DOC_KINDS.filter((d) => !uploaded[d.key]?.[0] && !existing.has(d.key)).map((d) => d.label);
+      const kinds = docKindsFor(me.licenseType);
+      const missing = kinds.filter((d) => !uploaded[d.key]?.[0] && !existing.has(d.key)).map((d) => d.label);
       if (missing.length) throw new HttpError(400, `Still missing: ${missing.join(', ')}.`);
       const approved = app.status === 'approved';
-      const saved = DOC_KINDS.flatMap((d) => {
+      const saved = kinds.flatMap((d) => {
         const f = uploaded[d.key]?.[0];
         return f ? [{ kind: d.key, f, fileId: saveFile(db, me.id, f) }] : [];
       });

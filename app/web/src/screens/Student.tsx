@@ -4,6 +4,7 @@ import { Link, useNavigate, useParams } from 'react-router';
 import type { Me } from '../../../shared/types';
 import { avatar, fmtDate, fmtTime, hoursLabel, peso, stars } from '../../../shared/format';
 import { CRITERIA, GRADES, SUBJECTS, WEEK } from '../../../shared/vocab';
+import { ELIGIBILITY, LICENSE_LABEL, RATE_TIERS, tierFor, type LicenseType } from '../../../shared/tiers';
 import { api, useAction, useApi } from '../api';
 import { PAYMENT, SESSION, type LinkView } from '../labels';
 import { BookModal, PayModal, RateModal } from '../modals/StudentModals';
@@ -44,6 +45,11 @@ export function CriteriaBars({ stats }: { stats: TutorStats }) {
       })}
     </div>
   );
+}
+
+/** "Licensed (LPT)" or "Non-licensed", so students can tell tutors' qualifications apart. */
+export function LicenseTag({ license }: { license: LicenseType }) {
+  return <Tag tone={license === 'licensed' ? 'info' : 'neutral'} size="sm" icon={license === 'licensed' ? 'seal-check' : 'student'}>{LICENSE_LABEL[license]}</Tag>;
 }
 
 export function PayTag({ x }: { x: SessionView }) {
@@ -219,6 +225,7 @@ function TutorCardItem({ m, onBook, note }: { m: TutorCard; onBook: () => void; 
         <div style={{ minWidth: 0, flex: 1 }}>
           <Link to={`/tutors/${m.id}`} style={{ fontFamily: 'var(--font-head)', fontSize: 19, fontWeight: 600, color: 'var(--color-text)', textDecoration: 'none' }}>{m.name}</Link>
           <div className="muted ellipsis" style={{ fontSize: 12 }}>{m.headline}</div>
+          <LicenseTag license={m.licenseType} />
         </div>
         <MatchRing pct={m.pct} />
       </div>
@@ -325,14 +332,15 @@ export function FindTutors() {
   const [maxRate, setMaxRate] = useState('');
   const [minRating, setMinRating] = useState('');
   const [day, setDay] = useState('');
+  const [license, setLicense] = useState('');
   const [scope, setScope] = useState<'all' | 'cluster'>('all');
   const [sort, setSort] = useState<'match' | 'rating' | 'price'>('match');
   const [modal, setModal] = useState<StudentModal | null>(null);
   const query = useDeferredValue(q.trim());
-  const params = new URLSearchParams(Object.entries({ q: query, subject, grade, maxRate, minRating, day, scope, sort }).filter(([, v]) => v)).toString();
+  const params = new URLSearchParams(Object.entries({ q: query, subject, grade, maxRate, minRating, day, license, scope, sort }).filter(([, v]) => v)).toString();
   const res = useQuery({ queryKey: ['/tutors', params], queryFn: () => api<SearchResponse>(`/tutors?${params}`), placeholderData: (prev) => prev });
-  const clear = () => { setQ(''); setSubject(''); setGrade(''); setMaxRate(''); setMinRating(''); setDay(''); };
-  const filtered = !!(query || subject || grade || maxRate || minRating || day);
+  const clear = () => { setQ(''); setSubject(''); setGrade(''); setMaxRate(''); setMinRating(''); setDay(''); setLicense(''); };
+  const filtered = !!(query || subject || grade || maxRate || minRating || day || license);
   return (
     <section className="page" style={{ gap: 18 }}>
       <PageHead title="Find a tutor" sub="Search every approved tutor. Your match score shows how close each one is to your profile." />
@@ -353,6 +361,9 @@ export function FindTutors() {
           </Field>
           <Field label="Rating">
             <select className="input sm" value={minRating} onChange={(e) => setMinRating(e.target.value)}><option value="">Any</option>{[4.5, 4, 3.5].map((r) => <option key={r} value={r}>★ {r} and up</option>)}</select>
+          </Field>
+          <Field label="License">
+            <select className="input sm" value={license} onChange={(e) => setLicense(e.target.value)}><option value="">Any</option><option value="licensed">{LICENSE_LABEL.licensed}</option><option value="non_licensed">{LICENSE_LABEL.non_licensed}</option></select>
           </Field>
           <Field label="Available on">
             <select className="input sm" value={day} onChange={(e) => setDay(e.target.value)}><option value="">Any day</option>{WEEK.map((d) => <option key={d}>{d}</option>)}</select>
@@ -411,6 +422,8 @@ export function TutorProfile({ me }: { me: Me }) {
   const facts = [
     ['books', 'Subjects', p.subjects.join(', ')],
     ['student', 'Levels', p.grades.join(', ')],
+    ['seal-check', 'License', t.licenseType === 'licensed' ? 'Licensed professional teacher (PRC)' : `Non-licensed · ${t.eligibility ? ELIGIBILITY[t.eligibility].label.split(' with ')[0] : 'eligible'}`],
+    ['money', 'Rate tier', `${RATE_TIERS[tierFor(t.licenseType, t.years)].label} (₱${RATE_TIERS[tierFor(t.licenseType, t.years)].min}–₱${RATE_TIERS[tierFor(t.licenseType, t.years)].max.toLocaleString('en-US')}/hr)`],
     ['graduation-cap', 'Education', t.education || '—'],
     ['flag', 'Curriculum', t.curricula.join(', ') || '—'],
     ['chalkboard', 'Lesson approach', t.method || '—'],

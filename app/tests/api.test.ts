@@ -8,6 +8,7 @@ import { createApp } from '../server/app';
 import { close, serve } from './serve';
 import { seedDemo } from '../server/seed';
 import { TERMS_VERSION } from '../shared/terms';
+import { rateError } from '../shared/tiers';
 
 let app: ReturnType<typeof serve>;
 let uploads: string;
@@ -382,6 +383,60 @@ describe('warnings', () => {
   it('shows the demo tutor the warning an admin sent', async () => {
     const paolo = await as('paolo.reyes@tutor.ph');
     expect((await paolo.get('/api/me/warnings')).body).toMatchObject({ active: 1, limit: 3 });
+  });
+});
+
+describe('license and rate tiers', () => {
+  const tutorSignup = (email: string, tutor: object) => ({
+    role: 'teacher', name: 'Tier Tutor', email, password: 'secret1', acceptTerms: true,
+    profile: { hobbies: ['Coding', 'Anime', 'Music'], learning: 'Visual', social: 0.3, approach: 0.8, subjects: ['Programming'], sched: ['Weekday evenings'], grades: ['Senior High'] },
+    tutor: { method: "4A's lesson plan", curricula: [], ...tutor },
+  });
+
+  it('lets non-licensed tutors apply within their band and with a diploma instead of a PRC license', async () => {
+    expect((await request(app).post('/api/auth/signup').send(tutorSignup('nl1@example.com', { licenseType: 'non_licensed', rate: 300, years: 1 }))).body.error).toMatch(/eligibility/);
+    expect((await request(app).post('/api/auth/signup').send(tutorSignup('nl2@example.com', { licenseType: 'non_licensed', eligibility: 'student', rate: 500, years: 1 }))).body.error).toMatch(/₱150–₱350/);
+    const agent = request.agent(app);
+    const ok = await agent.post('/api/auth/signup').send(tutorSignup('nl3@example.com', { licenseType: 'non_licensed', eligibility: 'student', rate: 250, years: 1 }));
+    expect(ok.status).toBe(201);
+    expect(ok.body.me.tutor).toMatchObject({ licenseType: 'non_licensed', eligibility: 'student', rate: 250 });
+
+    // Non-licensed applicants send a diploma or enrollment certificate, not a PRC license.
+    const missing = await agent.post('/api/me/application').field('video', 'https://youtu.be/demo')
+      .attach('prc', PDF, { filename: 'prc.pdf', contentType: 'application/pdf' })
+      .attach('birth', PDF, { filename: 'psa.pdf', contentType: 'application/pdf' })
+      .attach('tor', PDF, { filename: 'tor.pdf', contentType: 'application/pdf' });
+    expect(missing.body.error).toMatch(/Diploma or certificate of enrollment/);
+    const sent = await agent.post('/api/me/application').field('video', 'https://youtu.be/demo')
+      .attach('diploma', PDF, { filename: 'coe.pdf', contentType: 'application/pdf' })
+      .attach('birth', PDF, { filename: 'psa.pdf', contentType: 'application/pdf' })
+      .attach('tor', PDF, { filename: 'tor.pdf', contentType: 'application/pdf' });
+    expect(sent.status).toBe(200);
+    const admin = await as('admin@tutorstogo.ph');
+    const detail = (await admin.get(`/api/admin/applications/${ok.body.me.id}`)).body.application;
+    expect(detail.docs.map((d: { kind: string }) => d.kind).sort()).toEqual(['birth', 'diploma', 'tor']);
+  });
+
+  it('keeps licensed tutors inside their band and moves them up after five years', async () => {
+    expect((await request(app).post('/api/auth/signup').send(tutorSignup('lic1@example.com', { rate: 900, years: 2 }))).body.error).toMatch(/₱300–₱700/);
+    const agent = request.agent(app);
+    expect((await agent.post('/api/auth/signup').send(tutorSignup('lic2@example.com', { rate: 900, years: 6 }))).status).toBe(201);
+    const me = (await agent.get('/api/auth/me')).body.me;
+    const update = (tutor: object) => agent.put('/api/me/profile').send({ name: me.name, profile: me.profile, tutor: { ...me.tutor, ...tutor } });
+    expect((await update({ rate: 1500 })).body.error).toMatch(/₱400–₱1,200/);
+    // A tutor can't switch their own license type from the profile form.
+    expect((await update({ rate: 300, licenseType: 'non_licensed', eligibility: 'degree' })).body.error).toMatch(/₱400–₱1,200/);
+    expect((await update({ rate: 1100 })).status).toBe(200);
+  });
+
+  it('seeds every tutor inside their rate band and lets students filter by license', async () => {
+    const bea = await as('bea@student.ph');
+    const all = (await bea.get('/api/tutors')).body.tutors as { licenseType: string; rate: number; years: number }[];
+    expect(all.some((t) => t.licenseType === 'non_licensed')).toBe(true);
+    for (const t of all) expect(rateError(t.licenseType as 'licensed', t.years, t.rate)).toBeNull();
+    const nl = (await bea.get('/api/tutors?license=non_licensed')).body.tutors as { licenseType: string }[];
+    expect(nl.length).toBeGreaterThan(0);
+    expect(nl.every((t) => t.licenseType === 'non_licensed')).toBe(true);
   });
 });
 

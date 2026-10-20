@@ -13,6 +13,8 @@ export type SessionEventKind =
   | 'requested' | 'accepted' | 'declined' | 'auto_declined' | 'receipt_uploaded' | 'payment_approved' | 'payment_rejected' | 'completed';
 export type ReviewStatus = 'new' | 'reviewed' | 'action';
 
+import type { Eligibility, LicenseType } from './tiers';
+
 /** The matching profile: everything k-means sees about a person. */
 export interface Profile {
   hobbies: string[];
@@ -29,6 +31,9 @@ export interface Profile {
 }
 
 export interface TutorDetails {
+  licenseType: LicenseType;
+  /** Set for non-licensed tutors. */
+  eligibility: Eligibility | null;
   headline: string;
   rate: number;
   years: number;

@@ -53,6 +53,7 @@ export function sessionRoutes(ctx: Ctx) {
         levels: t.profile!.grades,
         rate: t.rate ?? 0,
         years: t.years ?? 0,
+        licenseType: t.licenseType ?? 'licensed',
         avg: s?.avg ?? 0,
         count: s?.count ?? 0,
         pct: m.pct,
@@ -148,6 +149,7 @@ export function sessionRoutes(ctx: Ctx) {
         maxRate: z.coerce.number().positive().optional(),
         minRating: z.coerce.number().min(0).max(5).optional(),
         day: z.enum(WEEK).optional(),
+        license: z.enum(['licensed', 'non_licensed']).optional(),
         scope: z.enum(['all', 'cluster']).default('all'),
         sort: z.enum(['match', 'rating', 'price']).default('match'),
       })
@@ -168,7 +170,8 @@ export function sessionRoutes(ctx: Ctx) {
         (!f.grade || c.levels.includes(f.grade)) &&
         (f.maxRate === undefined || c.rate <= f.maxRate) &&
         (f.minRating === undefined || (c.count > 0 && c.avg >= f.minRating)) &&
-        (!f.day || c.days.includes(f.day)),
+        (!f.day || c.days.includes(f.day)) &&
+        (!f.license || c.licenseType === f.license),
       );
     const by = { match: (a: typeof cards[number], b: typeof cards[number]) => b.pct - a.pct, rating: (a: typeof cards[number], b: typeof cards[number]) => b.avg - a.avg || b.count - a.count, price: (a: typeof cards[number], b: typeof cards[number]) => a.rate - b.rate };
     res.json({ tutors: cards.sort(by[f.sort]), total: scored.length });
@@ -210,6 +213,8 @@ export function sessionRoutes(ctx: Ctx) {
         education: t.education ?? '',
         curricula: t.curricula ?? [],
         method: t.method ?? '',
+        licenseType: t.licenseType ?? 'licensed',
+        eligibility: t.eligibility ?? null,
         profile: t.profile!,
         slots: sortSlots(t.slots ?? []),
       },

@@ -1,6 +1,7 @@
 /** Shapes of API responses the screens render. */
 import type { Profile, Settings } from '../../shared/types';
 import type { CriterionKey } from '../../shared/vocab';
+import type { Eligibility, LicenseType } from '../../shared/tiers';
 import type { ReviewView, SessionView } from './labels';
 
 export type { ReviewView, SessionView };
@@ -13,6 +14,7 @@ export interface TutorCard {
   levels: string[];
   rate: number;
   years: number;
+  licenseType: LicenseType;
   avg: number;
   count: number;
   pct: number;
@@ -53,6 +55,8 @@ export interface TutorProfileResponse {
     education: string;
     curricula: string[];
     method: string;
+    licenseType: LicenseType;
+    eligibility: Eligibility | null;
     profile: Profile;
     slots: string[];
   };

@@ -3,7 +3,8 @@ import { eq, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { applications, users } from '../db/schema';
 import { HttpError, endSession, hashPassword, requireUser, startSession, verifyPassword } from '../auth';
-import { emailSchema, profileSchema, tutorDetailsSchema, type Ctx } from '../context';
+import { checkTutor, emailSchema, profileSchema, tutorDetailsSchema, type Ctx } from '../context';
+import { clampRate } from '../../shared/tiers';
 import { meDto } from '../views';
 import { DEMO_ACCOUNTS, DEMO_PASSWORD, seedDemo } from '../seed';
 import { iso } from '../../shared/format';
@@ -53,6 +54,7 @@ export function authRoutes(ctx: Ctx) {
     if (byEmail(d.email)) throw new HttpError(409, 'An account with this email already exists.');
     if (d.role !== 'parent' && !d.profile) throw new HttpError(400, 'Complete your matching profile.');
     if (d.role === 'teacher' && !d.acceptTerms) throw new HttpError(400, 'Accept the Terms and Conditions to register as a tutor.');
+    if (d.role === 'teacher') checkTutor(d.tutor ?? {});
     const id = uid(d.role[0] + '_');
     const passwordHash = await hashPassword(d.password);
     let requested = false;
@@ -63,13 +65,17 @@ export function authRoutes(ctx: Ctx) {
         tx.insert(users).values({ ...base, profile: d.profile, gradeLabel: d.gradeLabel ?? '', school: d.school ?? '' }).run();
       } else if (d.role === 'teacher') {
         const t = d.tutor ?? {};
+        const licenseType = t.licenseType ?? 'licensed';
+        const years = t.years ?? 1;
         tx.insert(users)
           .values({
             ...base,
             profile: d.profile,
+            licenseType,
+            eligibility: licenseType === 'non_licensed' ? (t.eligibility ?? null) : null,
             headline: t.headline || `${d.profile!.subjects[0]} tutor`,
-            rate: t.rate ?? 400,
-            years: t.years ?? 1,
+            rate: t.rate ?? clampRate(licenseType, years, 400),
+            years,
             education: t.education ?? '',
             curricula: t.curricula ?? [],
             method: t.method ?? "4A's lesson plan",
@@ -150,7 +156,10 @@ export function authRoutes(ctx: Ctx) {
     if (me.role === 'student') Object.assign(patch, { gradeLabel: body.gradeLabel ?? '', school: body.school ?? '' });
     if (me.role === 'teacher') {
       if (!body.tutor) throw new HttpError(400, 'Fill in your teaching details.');
-      Object.assign(patch, body.tutor);
+      // Licence and eligibility come from the verified application, not the profile form.
+      const { licenseType: _l, eligibility: _e, ...details } = body.tutor;
+      checkTutor({ licenseType: me.licenseType ?? 'licensed', eligibility: me.eligibility, years: details.years, rate: details.rate });
+      Object.assign(patch, details);
     }
     db.update(users).set(patch).where(eq(users.id, me.id)).run();
     svc.bump();
