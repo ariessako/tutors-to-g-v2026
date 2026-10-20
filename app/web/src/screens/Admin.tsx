@@ -193,6 +193,7 @@ export function AdminApplications() {
 function ApplicationPanel({ id }: { id: string }) {
   const q = useApi<{ application: AppDetail }>(`/admin/applications/${id}`);
   const { run, error, setError, busy } = useAction();
+  const [confirm, setConfirm] = useState<ConfirmSpec | null>(null);
   const toast = useToast();
   const openFile = useOpenFile();
   if (!q.data) return q.error ? <ErrorBox error={q.error.message} /> : <Loading />;
@@ -207,8 +208,19 @@ function ApplicationPanel({ id }: { id: string }) {
     const note = String(fd.get('note') ?? '').trim();
     if (!status) return setError('Choose a status.');
     if ((status === 'needs_changes' || status === 'rejected') && !note) return setError('Add a note so the applicant knows what to fix.');
-    if (await run(() => api(`/admin/applications/${a.id}/status`, { body: { status, note } })))
-      toast(`${a.name}: ${APPLICATION[status].label}.${status === 'approved' ? ' They now appear in matches.' : ''}`);
+    const done = () => toast(`${a.name}: ${APPLICATION[status].label}.${status === 'approved' ? ' They now appear in matches.' : ''}`);
+    const update = () => api(`/admin/applications/${a.id}/status`, { body: { status, note } });
+    // Rejecting or sending back an application is confirmed first; the applicant sees the note.
+    if (status === 'rejected' || status === 'needs_changes')
+      return setConfirm({
+        title: status === 'rejected' ? `Reject ${a.name}’s application?` : `Request changes from ${a.name}?`,
+        body: status === 'rejected'
+          ? `${a.name} won’t be able to tutor unless the application is reopened. They’ll see your note: “${note}”`
+          : `The application goes back to ${a.name} to fix and resubmit. They’ll see your note: “${note}”`,
+        yes: status === 'rejected' ? 'Reject application' : 'Request changes',
+        action: attempt(update, done),
+      });
+    if (await run(update)) done();
   }
 
   const facts = [
@@ -278,6 +290,7 @@ function ApplicationPanel({ id }: { id: string }) {
           <button type="submit" className="btn btn-primary" disabled={busy}>Update application</button>
         </div>
       </form>
+      {confirm && <ConfirmModal spec={confirm} onClose={() => setConfirm(null)} />}
       {a.history.length > 0 && (
         <div style={{ padding: '12px 20px 18px', display: 'flex', flexDirection: 'column', gap: 6, borderTop: '1px solid var(--color-border)' }}>
           {a.history.map((h, i) => (
