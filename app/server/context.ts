@@ -7,7 +7,7 @@ import { files } from './db/schema';
 import type { Services } from './services';
 import { HttpError } from './auth';
 import { nowIso, uid } from './services';
-import { CURRICULA, FIRST_PAYMENT_PERCENTS, GRADES, HOBBIES, INSTALLMENT_PARTS, LEARNING, METHODS, SCHED, SUBJECTS } from '../shared/vocab';
+import { CURRICULA, FIRST_PAYMENT_PERCENTS, GRADES, HOBBIES, INSTALLMENT_INTERVALS, INSTALLMENT_PARTS, LEARNING, METHODS, SCHED, SUBJECTS } from '../shared/vocab';
 import { validateProfile } from '../shared/matching';
 import { rateError, type Eligibility, type LicenseType } from '../shared/tiers';
 
@@ -76,6 +76,7 @@ export const tutorDetailsSchema = z.object({
   allowInstallments: z.boolean().default(false),
   maxInstallments: z.number().int().refine((n) => (INSTALLMENT_PARTS as readonly number[]).includes(n), 'Choose 2, 3 or 4 installments.').default(2),
   minFirstPercent: z.number().int().refine((n) => (FIRST_PAYMENT_PERCENTS as readonly number[]).includes(n), 'Choose a first-payment percentage from the list.').default(50),
+  installmentIntervalDays: z.number().int().refine((n) => (INSTALLMENT_INTERVALS as readonly number[]).includes(n), 'Choose 7, 14 or 30 days between installments.').default(7),
 });
 
 /** Checks a tutor's licence, eligibility and rate together; throws a 400 on the first problem. */

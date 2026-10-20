@@ -28,6 +28,35 @@ const EVENT: Record<SessionEventKind, { label: string; icon: string }> = {
   completed: { label: 'Completed', icon: 'flag-checkered' },
 };
 
+const SCHEDULE: Record<SessionView['payment']['schedule'][number]['status'], { label: string; tone: 'ok' | 'warn' | 'bad' | 'neutral' | 'info' }> = {
+  paid: { label: 'Paid', tone: 'ok' },
+  in_review: { label: 'Under review', tone: 'warn' },
+  due: { label: 'Due', tone: 'info' },
+  overdue: { label: 'Overdue', tone: 'bad' },
+  upcoming: { label: 'Upcoming', tone: 'neutral' },
+  not_needed: { label: 'Not needed', tone: 'neutral' },
+};
+
+/** When each part is due, how much is suggested, and where it stands. */
+export function PaymentSchedule({ session: x }: { session: SessionView }) {
+  const p = x.payment;
+  return (
+    <table className="table" style={{ fontSize: 13 }}>
+      <thead><tr><th>{p.installments ? 'Installment' : 'Payment'}</th><th>Due date</th><th>Suggested</th><th>Status</th></tr></thead>
+      <tbody>
+        {p.schedule.map((r) => (
+          <tr key={r.part}>
+            <td>{p.installments ? `Part ${r.part} of ${p.planParts}` : 'Full payment'}</td>
+            <td className="nowrap">{fmtDate(r.dueDate)}</td>
+            <td>{peso(r.suggested)}</td>
+            <td><Tag tone={SCHEDULE[r.status].tone} size="sm">{SCHEDULE[r.status].label}</Tag></td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
 /** The tutor closes a session with its log. */
 export function CompleteModal({ session: x, onClose }: { session: SessionView; onClose: () => void }) {
   const [attendance, setAttendance] = useState<Attendance>('present');
@@ -106,6 +135,7 @@ export function SessionDetailsModal({ session: x, onClose }: { session: SessionV
             <strong style={{ fontSize: 14 }}>Payments</strong>
             <span className="muted" style={{ fontSize: 12 }}>{peso(x.payment.paid)} of {peso(x.amount)} received{x.payment.planParts > 1 ? ` · up to ${x.payment.planParts} installments` : ''}</span>
           </div>
+          <PaymentSchedule session={x} />
           {!x.payment.receipts.length && <p className="muted" style={{ fontSize: 13 }}>No receipts uploaded yet.</p>}
           {x.payment.receipts.map((r) => (
             <div key={r.id} className="row wrap" style={{ gap: 10, fontSize: 13 }}>

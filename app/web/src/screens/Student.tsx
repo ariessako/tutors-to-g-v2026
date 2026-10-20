@@ -54,7 +54,8 @@ export function LicenseTag({ license }: { license: LicenseType }) {
 
 export function PayTag({ x }: { x: SessionView }) {
   const p = PAYMENT[x.payment.status];
-  return <Tag tone={p.tone} icon={p.icon}>{p.label}{x.payment.status === 'partial' ? ` · ${peso(x.payment.balance)} left` : ''}</Tag>;
+  const due = x.payment.nextDue && x.payment.status !== 'for_review' ? (x.payment.overdue ? ` · overdue since ${fmtDate(x.payment.nextDue)}` : ` · due ${fmtDate(x.payment.nextDue)}`) : '';
+  return <Tag tone={x.payment.overdue ? 'bad' : p.tone} icon={p.icon}>{p.label}{x.payment.status === 'partial' ? ` · ${peso(x.payment.balance)} left` : ''}{due}</Tag>;
 }
 
 export const Shared = ({ items }: { items: string[] }) => (
@@ -194,7 +195,7 @@ export function StudentHome({ me }: { me: Me }) {
                 <Icon name="check-circle" style={{ fontSize: 22, color: 'var(--t-ok-fg)' }} />
                 <div style={{ flex: 1, minWidth: 200 }}>
                   <div style={{ fontWeight: 600 }}>{peso(p.amount)} received{p.planParts > 1 ? ` · installment ${p.part}` : ''}</div>
-                  <div className="muted" style={{ fontSize: 12 }}>{p.subject} with {p.tutor}, {fmtDate(p.date)} · {p.balance > 0 ? `${peso(p.balance)} balance left` : 'Fully paid'}</div>
+                  <div className="muted" style={{ fontSize: 12 }}>{p.subject} with {p.tutor}, {fmtDate(p.date)} · {p.balance > 0 ? `${peso(p.balance)} balance left${p.nextDue ? `, next part due ${fmtDate(p.nextDue)}` : ''}` : 'Fully paid'}</div>
                 </div>
                 <a className="btn btn-secondary btn-sm" href={`/api/payments/${p.id}/acknowledgment.pdf`} download><Icon name="download-simple" />Acknowledgment</a>
               </div>

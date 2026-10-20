@@ -9,6 +9,7 @@ import { close, serve } from './serve';
 import { seedDemo } from '../server/seed';
 import { TERMS_VERSION } from '../shared/terms';
 import { rateError } from '../shared/tiers';
+import { addDays, iso, parseIso } from '../shared/format';
 
 let app: ReturnType<typeof serve>;
 let uploads: string;
@@ -188,7 +189,14 @@ describe('booking and payment flow', () => {
     const bea = await as('bea@student.ph');
     // Bea's Tuesday Math session with Paolo: PHP 675, up to 3 parts, first part at least 40%.
     const s = (await bea.get('/api/sessions')).body.sessions.find((x: { status: string; amount: number; payment: { planParts: number } }) => x.status === 'accepted' && x.amount === 675 && x.payment.planParts === 3);
-    expect(s.payment).toMatchObject({ status: 'unpaid', balance: 675, nextPart: 1, minNext: 270, installments: true, canPay: true });
+    expect(s.payment).toMatchObject({ status: 'unpaid', balance: 675, nextPart: 1, minNext: 270, installments: true, canPay: true, nextDue: s.date });
+    // Part 1 is due on the session date, then every 7 days; suggested amounts follow the 40% floor and split the rest.
+    const week = (n: number) => iso(addDays(parseIso(s.date), 7 * n));
+    expect(s.payment.schedule).toEqual([
+      { part: 1, dueDate: s.date, suggested: 270, status: 'due' },
+      { part: 2, dueDate: week(1), suggested: 202, status: 'upcoming' },
+      { part: 3, dueDate: week(2), suggested: 203, status: 'upcoming' },
+    ]);
     const send = (amount: number, plan = 'installment') =>
       bea.post(`/api/sessions/${s.id}/receipt`).field('amount', String(amount)).field('plan', plan).attach('receipt', PDF, { filename: `part-${amount}.pdf`, contentType: 'application/pdf' });
     expect((await send(200)).body.error).toMatch(/at least ₱270/);
@@ -204,14 +212,16 @@ describe('booking and payment flow', () => {
     expect(ok1.body).toMatchObject({ status: 'partial', balance: 375 });
 
     const after = (await bea.get('/api/sessions')).body.sessions.find((x: { id: string }) => x.id === s.id).payment;
-    expect(after).toMatchObject({ status: 'partial', paid: 300, balance: 375, nextPart: 2, minNext: 1 });
+    expect(after).toMatchObject({ status: 'partial', paid: 300, balance: 375, nextPart: 2, minNext: 1, nextDue: week(1) });
+    expect(after.schedule.map((x: { status: string }) => x.status)).toEqual(['paid', 'due', 'upcoming']);
+    expect(first.dueDate).toBe(s.date);
     expect(after.receipts).toHaveLength(1);
     const home = (await bea.get('/api/student/home')).body.received;
     expect(home.find((p: { id: string }) => p.id === first.id)).toMatchObject({ amount: 300, part: 1, balance: 375 });
     const ack = await bea.get(`/api/payments/${first.id}/acknowledgment.pdf`);
     expect(ack.status).toBe(200);
     expect(ack.headers['content-type']).toBe('application/pdf');
-    expect(ack.body.toString('latin1')).toMatch(/Payment acknowledgment[\s\S]*PHP 300\.00[\s\S]*Balance: PHP 375\.00/);
+    expect(ack.body.toString('latin1')).toMatch(/Payment acknowledgment[\s\S]*PHP 300\.00[\s\S]*Balance: PHP 375\.00[\s\S]*Next installment: part 2, due/);
     const liza = await as('liza@parent.ph');
     expect((await liza.get(`/api/payments/${first.id}/acknowledgment.pdf`)).status).toBe(200);
     const stranger = await as('jen@tutor.ph');

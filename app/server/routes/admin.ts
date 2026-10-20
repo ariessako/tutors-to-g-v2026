@@ -249,6 +249,8 @@ export function adminRoutes(ctx: Ctx) {
           balance: st.balance,
           part: p.part,
           planParts: s.planParts,
+          dueDate: st.schedule[p.part - 1]?.dueDate ?? s.date,
+          nextDue: st.nextDue,
           amount: p.amount,
           reference: p.reference,
           receiptName: p.receiptName,

@@ -45,6 +45,7 @@ export const users = sqliteTable('users', {
   allowInstallments: integer('allow_installments', { mode: 'boolean' }).notNull().default(false),
   maxInstallments: integer('max_installments').notNull().default(2),
   minFirstPercent: integer('min_first_percent').notNull().default(50),
+  installmentIntervalDays: integer('installment_interval_days').notNull().default(7),
 });
 
 export const authSessions = sqliteTable('auth_sessions', {
@@ -117,6 +118,7 @@ export const tutoringSessions = sqliteTable('tutoring_sessions', {
   /** Installment terms copied from the tutor when the session was requested: 1 part means pay in full. */
   planParts: integer('plan_parts').notNull().default(1),
   planMinFirstPct: integer('plan_min_first_pct').notNull().default(100),
+  planIntervalDays: integer('plan_interval_days').notNull().default(7),
   // Legacy single-receipt columns, copied into `payments` by migration 0009 and no longer written.
   /** Optional reference number from the receipt. */
   paymentRef: text('payment_txn'),

@@ -8,6 +8,7 @@ import { eq } from 'drizzle-orm';
 import type { Db } from './db';
 import { payments, tutoringSessions } from './db/schema';
 import type { PaymentStatus } from '../shared/types';
+import { addDays, iso, parseIso } from '../shared/format';
 
 type Session = typeof tutoringSessions.$inferSelect;
 type Receipt = typeof payments.$inferSelect;
@@ -15,7 +16,26 @@ type Tx = Pick<Db, 'select' | 'update'>;
 
 const peso = (n: number) => Math.round(n * 100) / 100;
 
-export function paymentState(s: Pick<Session, 'amount' | 'status' | 'planParts' | 'planMinFirstPct'>, receipts: Receipt[]) {
+/**
+ * When each part is due and a suggested amount: the first part on the session
+ * date at the tutor's minimum percentage, each later one `planIntervalDays`
+ * after the previous with the rest split evenly. A full payment is one part
+ * due on the session date.
+ */
+export function paymentSchedule(s: Pick<Session, 'amount' | 'date' | 'planParts' | 'planMinFirstPct' | 'planIntervalDays'>) {
+  const n = Math.max(1, s.planParts);
+  const first = n === 1 ? s.amount : Math.ceil((s.amount * s.planMinFirstPct) / 100);
+  const rest = Math.floor((s.amount - first) / Math.max(1, n - 1));
+  return Array.from({ length: n }, (_, i) => ({
+    part: i + 1,
+    dueDate: iso(addDays(parseIso(s.date), i * s.planIntervalDays)),
+    suggested: i === 0 ? first : i === n - 1 ? peso(s.amount - first - rest * (n - 2)) : rest,
+  }));
+}
+
+export type ScheduleStatus = 'paid' | 'in_review' | 'due' | 'overdue' | 'upcoming' | 'not_needed';
+
+export function paymentState(s: Pick<Session, 'amount' | 'date' | 'status' | 'planParts' | 'planMinFirstPct' | 'planIntervalDays'>, receipts: Receipt[], today = iso(new Date())) {
   const approved = receipts.filter((p) => p.status === 'approved');
   const pending = receipts.find((p) => p.status === 'for_review') ?? null;
   const paid = peso(approved.reduce((n, p) => n + p.amount, 0));
@@ -33,6 +53,17 @@ export function paymentState(s: Pick<Session, 'amount' | 'status' | 'planParts' 
         : receipts.some((p) => p.status === 'rejected')
           ? 'rejected'
           : 'unpaid';
+  const schedule = paymentSchedule(s).map((p) => ({
+    ...p,
+    status: (p.part <= approved.length
+      ? 'paid'
+      : balance <= 0
+        ? 'not_needed'
+        : p.part === nextPart
+          ? pending ? 'in_review' : p.dueDate < today ? 'overdue' : 'due'
+          : 'upcoming') as ScheduleStatus,
+  }));
+  const next = schedule.find((p) => p.part === nextPart && balance > 0) ?? null;
   return {
     status,
     paid,
@@ -40,6 +71,10 @@ export function paymentState(s: Pick<Session, 'amount' | 'status' | 'planParts' 
     nextPart,
     minNext,
     installments,
+    schedule,
+    /** Due date of the part to pay next, or null when nothing is owed. */
+    nextDue: next?.dueDate ?? null,
+    overdue: next?.status === 'overdue',
     canPay: (s.status === 'accepted' || s.status === 'completed') && !pending && balance > 0,
   };
 }

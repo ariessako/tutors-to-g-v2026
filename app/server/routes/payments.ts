@@ -36,6 +36,10 @@ export function paymentRoutes(ctx: Ctx) {
       `Payment reference: ${p.reference ?? '-'}`,
       `Session total: ${peso(s.amount)}   Paid so far: ${peso(state.paid)}   Balance: ${peso(state.balance)}`,
     ];
+    if (state.nextDue) {
+      const next = state.schedule.find((x) => x.part === state.nextPart)!;
+      lines.push(`Next installment: part ${next.part}, due ${fmtDate(next.dueDate)} (suggested ${peso(Math.min(next.suggested, state.balance))})`);
+    }
     const pdf = mockPdf('Payment acknowledgment', lines, 'Tutors To Go confirms receipt of this payment. Keep this for your records.');
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename="tutors-to-go-acknowledgment-${p.id}.pdf"`);

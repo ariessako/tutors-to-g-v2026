@@ -3,7 +3,7 @@
  * named, so the surrounding <form> reads them with readProfile/readTutor.
  */
 import { useState } from 'react';
-import { CURRICULA, FIRST_PAYMENT_PERCENTS, GRADES, HOBBIES, INSTALLMENT_PARTS, HOBBY_MAX, HOBBY_MIN, LEARNING, METHODS, SCHED, SUBJECTS } from '../../shared/vocab';
+import { CURRICULA, FIRST_PAYMENT_PERCENTS, GRADES, HOBBIES, INSTALLMENT_INTERVALS, INSTALLMENT_PARTS, HOBBY_MAX, HOBBY_MIN, LEARNING, METHODS, SCHED, SUBJECTS } from '../../shared/vocab';
 import type { Profile, TutorDetails } from '../../shared/types';
 import { Field, Icon, Tag } from './ui';
 import { RATE_TIERS, SENIOR_YEARS, tierFor } from '../../shared/tiers';
@@ -43,6 +43,7 @@ export function readTutor(fd: FormData): TutorDetails {
     allowInstallments: fd.get('allowInstallments') === 'on',
     maxInstallments: Number(fd.get('maxInstallments')) || 2,
     minFirstPercent: Number(fd.get('minFirstPercent')) || 50,
+    installmentIntervalDays: Number(fd.get('installmentIntervalDays')) || 7,
   };
 }
 
@@ -75,7 +76,7 @@ export function ProfileFields({ mode, profile, tutor, details = false }: { mode:
     method: tutor?.method ?? '',
   }));
   const [over, setOver] = useState(false);
-  const t = { headline: '', rate: 400, years: 1, education: '', bio: '', licenseType: 'licensed' as const, eligibility: null, allowInstallments: false, maxInstallments: 2, minFirstPercent: 50, ...tutor };
+  const t = { headline: '', rate: 400, years: 1, education: '', bio: '', licenseType: 'licensed' as const, eligibility: null, allowInstallments: false, maxInstallments: 2, minFirstPercent: 50, installmentIntervalDays: 7, ...tutor };
   const [installments, setInstallments] = useState(t.allowInstallments);
   const [years, setYears] = useState(t.years);
   const band = RATE_TIERS[tierFor(t.licenseType, years)];
@@ -151,6 +152,12 @@ export function ProfileFields({ mode, profile, tutor, details = false }: { mode:
                     {FIRST_PAYMENT_PERCENTS.map((n) => <option key={n} value={n}>{n}% of the fee</option>)}
                   </select>
                 </Field>
+                <Field label="Next parts due every">
+                  <select className="input sm" name="installmentIntervalDays" defaultValue={t.installmentIntervalDays}>
+                    {INSTALLMENT_INTERVALS.map((n) => <option key={n} value={n}>{n} days</option>)}
+                  </select>
+                </Field>
+                <p className="muted" style={{ gridColumn: '1 / -1', fontSize: 12 }}>The first part is due on the session date; each next part is due this many days after the previous one.</p>
               </div>
             )}
           </div>

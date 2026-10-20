@@ -18,6 +18,7 @@ export function meDto(db: Db, u: User): Me {
       allowInstallments: u.allowInstallments,
       maxInstallments: u.maxInstallments,
       minFirstPercent: u.minFirstPercent,
+      installmentIntervalDays: u.installmentIntervalDays,
       licenseType: u.licenseType ?? 'licensed',
       eligibility: u.eligibility ?? null,
       headline: u.headline ?? '',
@@ -92,6 +93,7 @@ export function sessionViews(db: Db, rows: SessionRow[]) {
       ...state,
       planParts: r.planParts,
       planMinFirstPct: r.planMinFirstPct,
+      planIntervalDays: r.planIntervalDays,
       receipts: mine.map((p) => ({ id: p.id, part: p.part, amount: p.amount, reference: p.reference, receiptName: p.receiptName, receiptFileId: p.receiptFileId, status: p.status, uploadedAt: p.uploadedAt, reviewedAt: p.reviewedAt })),
     },
   };

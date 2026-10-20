@@ -114,7 +114,7 @@ export function sessionRoutes(ctx: Ctx) {
       .map((p) => {
         const s = byId.get(p.sessionId)!;
         const state = paymentState(s, receiptsFor(db, s.id));
-        return { id: p.id, amount: p.amount, part: p.part, planParts: s.planParts, reviewedAt: p.reviewedAt, subject: s.subject, date: s.date, tutor: tutor(s.tutorId).name, balance: state.balance };
+        return { id: p.id, amount: p.amount, part: p.part, planParts: s.planParts, reviewedAt: p.reviewedAt, subject: s.subject, date: s.date, tutor: tutor(s.tutorId).name, balance: state.balance, nextDue: state.nextDue };
       });
   }
 
@@ -291,6 +291,7 @@ export function sessionRoutes(ctx: Ctx) {
           // The tutor's installment terms at booking time apply to this session even if they change later.
           planParts: t.allowInstallments ? t.maxInstallments : 1,
           planMinFirstPct: t.allowInstallments ? t.minFirstPercent : 100,
+          planIntervalDays: t.installmentIntervalDays,
         })
         .run();
       logEvent(tx, id, 'requested', me.id);

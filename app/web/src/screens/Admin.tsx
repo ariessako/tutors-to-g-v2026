@@ -616,6 +616,8 @@ interface PaymentRow {
   balance: number;
   part: number;
   planParts: number;
+  dueDate: string;
+  nextDue: string | null;
   amount: number;
   reference: string | null;
   receiptName: string | null;
@@ -677,11 +679,11 @@ export function AdminPayments() {
                       <td><div>{p.subject} · {fmtDate(p.date)}</div><div className="muted" style={{ fontSize: 12 }}>Uploaded {fmtStamp(p.at)}</div></td>
                       <td>
                         <div style={{ fontWeight: 700 }}>{peso(p.amount)}</div>
-                        <div className="muted" style={{ fontSize: 12 }}>{p.planParts > 1 ? `Installment ${p.part} of up to ${p.planParts}` : 'Full payment'}</div>
+                        <div className="muted" style={{ fontSize: 12 }}>{p.planParts > 1 ? `Installment ${p.part} of up to ${p.planParts}` : 'Full payment'} · due {fmtDate(p.dueDate)}</div>
                       </td>
                       <td>
                         <div>{peso(p.due)}</div>
-                        <div className="muted" style={{ fontSize: 12 }}>{peso(p.paid)} received · {p.balance > 0 ? `${peso(p.balance)} due` : 'paid'}</div>
+                        <div className="muted" style={{ fontSize: 12 }}>{peso(p.paid)} received · {p.balance > 0 ? `${peso(p.balance)} due${p.nextDue ? ` (next by ${fmtDate(p.nextDue)})` : ''}` : 'paid'}</div>
                       </td>
                       <td style={{ fontFamily: 'ui-monospace, Menlo, monospace', fontSize: 12 }}>{p.reference ?? '—'}</td>
                       <td>

@@ -48,6 +48,8 @@ export interface TutorDetails {
   allowInstallments: boolean;
   maxInstallments: number;
   minFirstPercent: number;
+  /** Days between installment due dates; the first part is due on the session date. */
+  installmentIntervalDays: number;
 }
 
 export interface Settings {

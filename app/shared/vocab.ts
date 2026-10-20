@@ -33,6 +33,8 @@ export const SCHEDULE_HOURS = [
 /** Installment choices tutors can offer. */
 export const INSTALLMENT_PARTS = [2, 3, 4] as const;
 export const FIRST_PAYMENT_PERCENTS = [25, 30, 40, 50, 60, 75] as const;
+/** Days between installment due dates. */
+export const INSTALLMENT_INTERVALS = [7, 14, 30] as const;
 
 /** Active warnings that ban an account automatically. */
 export const WARNING_LIMIT = 3;

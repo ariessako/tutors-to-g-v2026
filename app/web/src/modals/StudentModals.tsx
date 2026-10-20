@@ -5,6 +5,7 @@ import { fmtDate, fmtTime, hoursLabel, peso } from '../../../shared/format';
 import { CRITERIA, SESSION_HOURS, SESSION_MODES, type CriterionKey } from '../../../shared/vocab';
 import { api, ApiError, useAction, useApi } from '../api';
 import type { SessionView } from '../types';
+import { PaymentSchedule } from './SessionModals';
 import { ErrorBox, Field, Icon, Loading, Modal, Seg, useToast } from '../ui';
 
 interface BookingInfo {
@@ -174,6 +175,11 @@ export function PayModal({ session: x, onClose }: { session: SessionView; onClos
             )}
           </div>
         )}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <span className="label" style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-muted)' }}>{p.installments ? 'Payment schedule' : 'When to pay'}</span>
+          <PaymentSchedule session={x} />
+          {p.installments && <span className="muted" style={{ fontSize: 12 }}>Suggested amounts are a guide: you can pay more on any part, and paying the balance early finishes the plan.</span>}
+        </div>
         <p className="dialog-body">Upload the receipt for your payment. An admin checks it before it counts toward the session.</p>
         <Field label="Receipt (image or PDF, up to 10 MB)">
           <input className="input" type="file" accept="image/*,.pdf" style={{ padding: 6, height: 'auto' }} onChange={(e) => setFile(e.target.files?.[0] ?? null)} />

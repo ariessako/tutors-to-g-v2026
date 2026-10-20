@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { BLOCKS, DIM, DMAX, cluster, coverage, elbow, encode, kmeans, matchPct, matchesFor, validateProfile, type PersonInput } from '../shared/matching';
 import type { Profile } from '../shared/types';
+import { paymentSchedule, paymentState } from '../server/payments';
 
 const base: Profile = { hobbies: ['Basketball', 'Music', 'Drawing'], learning: 'Visual', social: 0.5, approach: 0.5, subjects: ['Math'], sched: ['Weekends'], grades: ['Junior High'] };
 
@@ -82,6 +83,27 @@ describe('coverage', () => {
     expect(coverage(base, everything)).toEqual({ subjects: ['Math'], grades: ['Junior High'], sched: ['Weekends'], full: true });
     expect(coverage(base, { ...everything, sched: ['Weekday mornings'] }).full).toBe(false);
     expect(coverage({ ...base, subjects: ['Math', 'Accounting'] }, everything)).toMatchObject({ subjects: ['Math'], full: false });
+  });
+});
+
+describe('payment schedule', () => {
+  const session = { amount: 1000, date: '2026-11-02', status: 'accepted' as const, planParts: 3, planMinFirstPct: 50, planIntervalDays: 14 };
+  const receipt = (part: number, amount: number, status: 'approved' | 'for_review') => ({ id: `p${part}`, sessionId: 's', part, amount, reference: null, receiptFileId: null, receiptName: 'r.pdf', status, uploadedAt: '2026-11-01', reviewedAt: null, reviewedBy: null });
+  it('dates each part from the session date and flags overdue parts', () => {
+    expect(paymentSchedule(session)).toEqual([
+      { part: 1, dueDate: '2026-11-02', suggested: 500 },
+      { part: 2, dueDate: '2026-11-16', suggested: 250 },
+      { part: 3, dueDate: '2026-11-30', suggested: 250 },
+    ]);
+    expect(paymentState(session, [], '2026-11-03')).toMatchObject({ nextDue: '2026-11-02', overdue: true });
+    const partly = paymentState(session, [receipt(1, 500, 'approved'), receipt(2, 200, 'for_review')], '2026-11-20');
+    expect(partly.schedule.map((x) => x.status)).toEqual(['paid', 'in_review', 'upcoming']);
+    expect(partly.overdue).toBe(false);
+    // Paying the whole balance early makes the remaining parts unnecessary.
+    const early = paymentState(session, [receipt(1, 1000, 'approved')], '2026-11-03');
+    expect(early.schedule.map((x) => x.status)).toEqual(['paid', 'not_needed', 'not_needed']);
+    expect(early.nextDue).toBeNull();
+    expect(paymentSchedule({ ...session, planParts: 1 })).toEqual([{ part: 1, dueDate: '2026-11-02', suggested: 1000 }]);
   });
 });
 

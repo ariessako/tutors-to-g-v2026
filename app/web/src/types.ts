@@ -36,7 +36,7 @@ export interface StudentHome {
   stats: { completed: number; hours: number; pending: number; groups: number; invites: number };
   top: TutorCard[];
   toRate: SessionView[];
-  received: { id: string; amount: number; part: number; planParts: number; reviewedAt: string | null; subject: string; date: string; tutor: string; balance: number }[];
+  received: { id: string; amount: number; part: number; planParts: number; reviewedAt: string | null; subject: string; date: string; tutor: string; balance: number; nextDue: string | null }[];
 }
 
 export interface MatchesResponse {
