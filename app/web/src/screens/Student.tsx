@@ -233,10 +233,45 @@ const SORTS = [
 ] as const;
 type Sort = (typeof SORTS)[number]['value'];
 
+/** Why a tutor is listed, as a short label with a one-line explanation. */
+const MATCH_KINDS = {
+  cluster: { label: 'Best match', short: 'Same cluster as you', icon: 'circles-three-plus', tone: 'accent', explain: 'In your cluster: their whole profile (hobbies, learning style, personality, subjects, schedule, level) is closest to yours.' },
+  covers: { label: 'Covers your needs', short: 'Other cluster, teaches what you need', icon: 'check-circle', tone: 'ok', explain: 'In another cluster, but teaches all your subjects at your level and shares a free time with you.' },
+  nearby: { label: 'Similar, other cluster', short: 'Close profile, other cluster', icon: 'compass', tone: 'neutral', explain: 'Close to your profile overall, but k-means put them in a different group.' },
+} as const;
+type MatchKind = keyof typeof MATCH_KINDS;
+
+export function MatchLabel({ kind }: { kind: MatchKind }) {
+  const k = MATCH_KINDS[kind];
+  return <span title={k.explain}><Tag tone={k.tone} size="sm" icon={k.icon}>{k.label}</Tag></span>;
+}
+
+/** The three labels with what each means, shown above the matches. */
+function MatchLegend() {
+  return (
+    <div className="card card-pad" style={{ gap: 8, boxShadow: 'none', background: 'var(--color-surface-2)' }}>
+      <span style={{ fontWeight: 700, fontSize: 13 }}>How to read your matches</span>
+      {(Object.keys(MATCH_KINDS) as MatchKind[]).map((k) => (
+        <div key={k} className="row" style={{ gap: 10, alignItems: 'flex-start', fontSize: 13 }}>
+          <span style={{ flexShrink: 0, minWidth: 170 }}><MatchLabel kind={k} /></span>
+          <span className="muted">{MATCH_KINDS[k].explain}</span>
+        </div>
+      ))}
+      <span className="muted" style={{ fontSize: 12 }}>The % is how close a tutor’s profile is to yours. The bars on each card show which parts match.</span>
+    </div>
+  );
+}
+
 /** A tutor result: match score, rating, rate, shared hobbies and how closely each part of the profile matches. */
-function TutorCardItem({ m, onBook, note }: { m: TutorCard; onBook: () => void; note?: ReactNode }) {
+function TutorCardItem({ m, onBook, note, kind }: { m: TutorCard; onBook: () => void; note?: ReactNode; kind?: MatchKind }) {
   return (
     <article className="card card-hover" style={{ padding: 18, display: 'flex', flexDirection: 'column', gap: 12, cursor: 'default' }}>
+      {kind && (
+        <div className="row" style={{ gap: 8 }}>
+          <MatchLabel kind={kind} />
+          <span className="muted ellipsis" style={{ fontSize: 11 }}>{MATCH_KINDS[kind].short}</span>
+        </div>
+      )}
       <div className="row" style={{ gap: 12 }}>
         <Avatar name={m.name} size={46} />
         <div style={{ minWidth: 0, flex: 1 }}>
@@ -302,6 +337,7 @@ export function Matches() {
       >
         <span className="tag tag-outline"><Icon name="circles-three-plus" />{M.settings.approach === 'tutor' ? 'Tutor-only clustering' : 'Joint clustering'} · k = {M.settings.k}</span>
       </PageHead>
+      <MatchLegend />
       <div className="row wrap" style={{ justifyContent: 'space-between', gap: 12 }}>
         <Seg label="Subject" value={cur} onChange={setSubj} options={subjects.map((s) => ({ value: s, label: s }))} />
         <div className="row" style={{ gap: 8 }}>
@@ -312,18 +348,47 @@ export function Matches() {
       {!list.length && <div className="empty">No tutors in your cluster teach {cur}. Try another subject or check the tutors outside your cluster below.</div>}
       <div className="card-grid">
         {list.map((m) => (
-          <TutorCardItem key={m.id} m={m} onBook={() => setModal({ type: 'book', tutorId: m.id })} />
+          <TutorCardItem key={m.id} m={m} kind="cluster" onBook={() => setModal({ type: 'book', tutorId: m.id })} />
         ))}
       </div>
+      {M.coverAll.length > 0 && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <div>
+            <h2 style={{ fontSize: 22 }}>Covers everything you need</h2>
+            <p className="muted" style={{ fontSize: 13 }}>
+              Outside your cluster, but these tutors teach all your subjects at your level and share a free time with you. K-means grouped them elsewhere mostly because your hobbies differ.
+            </p>
+          </div>
+          <div className="card-grid">
+            {M.coverAll.map((m) => (
+              <TutorCardItem
+                key={m.id}
+                m={m}
+                kind="covers"
+                onBook={() => setModal({ type: 'book', tutorId: m.id })}
+                note={
+                  <div className="row wrap" style={{ gap: 6 }}>
+                    <Tag tone="ok" size="sm" icon="check-circle">Teaches {m.covers.subjects.join(', ')}</Tag>
+                    <Tag tone="ok" size="sm" icon="student">{m.covers.grades.join(', ')}</Tag>
+                    <Tag tone="ok" size="sm" icon="clock">{m.covers.sched.join(', ')}</Tag>
+                    <Tag tone="neutral" size="sm" icon="circles-three-plus">Cluster {m.cluster + 1}</Tag>
+                  </div>
+                }
+              />
+            ))}
+          </div>
+        </div>
+      )}
       <div className="card card-clip">
         <CardHead icon="compass" title="Closest tutors outside your cluster" sub="Near your profile overall, but k-means grouped them elsewhere." />
         <div className="table-scroll">
           <table className="table lg hover">
-            <thead><tr><th>Tutor</th><th>Cluster</th><th>Subjects</th><th>Match</th><th /></tr></thead>
+            <thead><tr><th>Tutor</th><th>Why listed</th><th>Cluster</th><th>Subjects</th><th>Match</th><th /></tr></thead>
             <tbody>
               {M.others.map((m) => (
                 <tr key={m.id}>
                   <td><div className="row"><Avatar name={m.name} size={30} /><span style={{ fontWeight: 600 }}>{m.name}</span></div></td>
+                  <td><MatchLabel kind={m.covers.full ? 'covers' : 'nearby'} /></td>
                   <td>C{m.cluster + 1}</td>
                   <td>{m.subjects.join(', ')}</td>
                   <td style={{ fontWeight: 700 }}>{m.pct}%</td>
@@ -409,9 +474,9 @@ export function FindTutors() {
                 key={m.id}
                 m={m}
                 onBook={() => setModal({ type: 'book', tutorId: m.id })}
+                kind={m.inCluster ? 'cluster' : m.covers.full ? 'covers' : undefined}
                 note={
                   <div className="row wrap" style={{ gap: 6 }}>
-                    {m.inCluster && <Tag tone="accent" size="sm" icon="circles-three-plus">Your cluster</Tag>}
                     {m.days.length > 0 && <span className="muted" style={{ fontSize: 12 }}>Open {m.days.join(', ')}</span>}
                   </div>
                 }

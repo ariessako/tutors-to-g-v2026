@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BLOCKS, DIM, DMAX, cluster, elbow, encode, kmeans, matchPct, matchesFor, validateProfile, type PersonInput } from '../shared/matching';
+import { BLOCKS, DIM, DMAX, cluster, coverage, elbow, encode, kmeans, matchPct, matchesFor, validateProfile, type PersonInput } from '../shared/matching';
 import type { Profile } from '../shared/types';
 
 const base: Profile = { hobbies: ['Basketball', 'Music', 'Drawing'], learning: 'Visual', social: 0.5, approach: 0.5, subjects: ['Math'], sched: ['Weekends'], grades: ['Junior High'] };
@@ -73,6 +73,15 @@ describe('cluster and matchesFor', () => {
     expect(matchesFor(cl, 's1')).toBeNull();
     expect(cl.people[0].xy.every(Number.isFinite)).toBe(true);
     if (approach === 'tutor') expect(cl.assignOf.s1).toBe(-1);
+  });
+});
+
+describe('coverage', () => {
+  it('counts what the student needs, so offering more never hurts', () => {
+    const everything = { ...base, subjects: ['Math', 'Science', 'English'], grades: ['Junior High', 'Senior High', 'College'], sched: ['Weekends', 'Weekday mornings'] };
+    expect(coverage(base, everything)).toEqual({ subjects: ['Math'], grades: ['Junior High'], sched: ['Weekends'], full: true });
+    expect(coverage(base, { ...everything, sched: ['Weekday mornings'] }).full).toBe(false);
+    expect(coverage({ ...base, subjects: ['Math', 'Accounting'] }, everything)).toMatchObject({ subjects: ['Math'], full: false });
   });
 });
 

@@ -46,6 +46,13 @@ describe('auth', () => {
     expect(r.body.cluster.no).toBeGreaterThan(0);
     const m = await agent.get('/api/matches');
     expect(m.body.matches.inCluster.length).toBeGreaterThan(0);
+    // Tutors outside the cluster who still cover every need get their own section.
+    const inCluster = new Set(m.body.matches.inCluster.map((t: { id: string }) => t.id));
+    for (const t of m.body.matches.coverAll) {
+      expect(inCluster.has(t.id)).toBe(false);
+      expect(t.covers.full).toBe(true);
+      expect(t.covers.subjects).toEqual(['Programming']);
+    }
   });
 
   it('makes tutors accept the terms and records the version', async () => {

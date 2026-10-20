@@ -21,6 +21,7 @@ export interface TutorCard {
   d: number;
   cluster: number;
   sharedHobbies: string[];
+  covers: { subjects: string[]; grades: string[]; sched: string[]; full: boolean };
   days: string[];
   why: string;
   blocks: { label: string; sim: number }[];
@@ -40,7 +41,7 @@ export interface StudentHome {
 
 export interface MatchesResponse {
   reason?: 'no_tutors' | 'profile_required';
-  matches: null | { cluster: ClusterSummary; settings: Settings; inCluster: TutorCard[]; others: TutorCard[] };
+  matches: null | { cluster: ClusterSummary; settings: Settings; inCluster: TutorCard[]; others: TutorCard[]; coverAll: TutorCard[] };
 }
 
 export interface TutorStats { avg: number; count: number; dist: number[]; criteria: Record<CriterionKey, number | null> }

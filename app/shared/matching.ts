@@ -398,6 +398,24 @@ export function why(sp: Profile, tp: Profile, tutorName: string) {
   return t.charAt(0).toUpperCase() + t.slice(1) + '.';
 }
 
+/**
+ * How much of what the student needs a tutor offers: the student's subjects
+ * and grade levels the tutor teaches, and the free times they share. Unlike
+ * the distance, offering extra options never lowers it.
+ */
+export function coverage(student: Profile, tutor: Profile) {
+  const subjects = student.subjects.filter((s) => tutor.subjects.includes(s));
+  const grades = student.grades.filter((g) => tutor.grades.includes(g));
+  const sched = student.sched.filter((s) => tutor.sched.includes(s));
+  return {
+    subjects,
+    grades,
+    sched,
+    /** Every subject and grade level the student picked, and at least one shared free time. */
+    full: subjects.length === student.subjects.length && grades.length === student.grades.length && sched.length > 0,
+  };
+}
+
 /** Match score shown to users: 1 − d² ÷ d²max, as a whole percent. */
 export const matchPct = (d: number) => Math.max(0, Math.round(100 * (1 - (d * d) / (DMAX * DMAX))));
 
@@ -409,6 +427,7 @@ export interface ScoredTutor {
   cluster: number;
   blocks: ReturnType<typeof blockSims>;
   sharedHobbies: string[];
+  covers: ReturnType<typeof coverage>;
   why: string;
 }
 
@@ -437,6 +456,7 @@ export function matchesFor(cl: ClusterResult, studentId: string): MatchResult | 
         cluster: cl.assignOf[t.id],
         blocks: blockSims(me.profile, t.profile),
         sharedHobbies: me.profile.hobbies.filter((h) => t.profile.hobbies.includes(h)),
+        covers: coverage(me.profile, t.profile),
         why: why(me.profile, t.profile, t.name),
       };
     })

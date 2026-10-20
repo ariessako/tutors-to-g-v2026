@@ -61,6 +61,7 @@ export function sessionRoutes(ctx: Ctx) {
         d: m.d,
         cluster: m.cluster,
         sharedHobbies: m.sharedHobbies,
+        covers: m.covers,
         days: WEEK.filter((d) => (t.slots ?? []).some((s) => s.startsWith(d))),
         why: m.why,
         blocks: m.blocks.map((b) => ({ label: b.label, sim: b.sim })),
@@ -152,6 +153,8 @@ export function sessionRoutes(ctx: Ctx) {
         settings: svc.getSettings(),
         inCluster: tutorCards(m.inCluster),
         others: tutorCards(m.others.slice(0, 5)),
+        // Tutors k-means grouped elsewhere who still offer everything this student asked for.
+        coverAll: tutorCards(m.others.filter((t) => t.covers.full).slice(0, 6)),
       },
     });
   });
