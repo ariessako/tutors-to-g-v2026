@@ -43,6 +43,13 @@
       "when": 1792490587519,
       "tag": "0005_session_log",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1792491346087,
+      "tag": "0006_review_criteria",
+      "breakpoints": true
     }
   ]
 }

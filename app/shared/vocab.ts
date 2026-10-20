@@ -30,6 +30,15 @@ export const SCHEDULE_HOURS = [
   '08:00', '09:00', '10:00', '11:00', '12:00', '13:00', '14:00', '15:00', '16:00', '17:00', '18:00', '19:00', '20:00',
 ] as const;
 
+/** What students and parents rate besides the overall stars. */
+export const CRITERIA = [
+  { key: 'clarity', label: 'Explains clearly' },
+  { key: 'patience', label: 'Patience' },
+  { key: 'punctuality', label: 'Punctuality' },
+  { key: 'preparation', label: 'Preparation' },
+] as const;
+export type CriterionKey = (typeof CRITERIA)[number]['key'];
+
 export const SESSION_HOURS = [1, 1.5, 2] as const;
 export const SESSION_MODES = ['Online (Google Meet)', 'In-person'] as const;
 

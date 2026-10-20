@@ -1,5 +1,6 @@
 /** Shapes of API responses the screens render. */
 import type { Profile, Settings } from '../../shared/types';
+import type { CriterionKey } from '../../shared/vocab';
 import type { ReviewView, SessionView } from './labels';
 
 export type { ReviewView, SessionView };
@@ -39,7 +40,7 @@ export interface MatchesResponse {
   matches: null | { cluster: ClusterSummary; settings: Settings; inCluster: TutorCard[]; others: TutorCard[] };
 }
 
-export interface TutorStats { avg: number; count: number; dist: number[] }
+export interface TutorStats { avg: number; count: number; dist: number[]; criteria: Record<CriterionKey, number | null> }
 
 export interface TutorProfileResponse {
   tutor: {

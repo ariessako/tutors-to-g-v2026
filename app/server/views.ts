@@ -110,6 +110,7 @@ export function reviewViews(db: Db, rows: ReviewRow[], revealAuthors = false) {
         ? `Anonymous ${r.authorRole === 'parent' ? 'parent' : 'student'}`
         : `${author}${r.authorRole === 'parent' ? ' (parent)' : ''}`,
       rating: r.rating,
+      criteria: r.criteria ?? null,
       comment: r.comment,
       anonymous: r.anonymous,
       date: r.date,

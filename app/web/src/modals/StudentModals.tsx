@@ -2,7 +2,7 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router';
 import { fmtDate, fmtTime, hoursLabel, peso } from '../../../shared/format';
-import { SESSION_HOURS, SESSION_MODES } from '../../../shared/vocab';
+import { CRITERIA, SESSION_HOURS, SESSION_MODES, type CriterionKey } from '../../../shared/vocab';
 import { api, ApiError, useAction, useApi } from '../api';
 import type { SessionView } from '../types';
 import { ErrorBox, Field, Icon, Loading, Modal, Seg, useToast } from '../ui';
@@ -178,6 +178,7 @@ const RATING_LABELS = ['', 'Poor', 'Fair', 'Good', 'Very good', 'Excellent'];
 
 export function RateModal({ tutorId, tutorName, sessionId, onClose }: { tutorId: string; tutorName: string; sessionId?: string; onClose: () => void }) {
   const [stars, setStars] = useState(0);
+  const [criteria, setCriteria] = useState<Partial<Record<CriterionKey, number>>>({});
   const { run, error, setError, busy } = useAction();
   const toast = useToast();
 
@@ -185,8 +186,10 @@ export function RateModal({ tutorId, tutorName, sessionId, onClose }: { tutorId:
     e.preventDefault();
     const comment = String(new FormData(e.currentTarget).get('comment') ?? '').trim();
     if (!stars) return setError('Choose a star rating.');
+    const missing = CRITERIA.find((c) => !criteria[c.key]);
+    if (missing) return setError(`Rate “${missing.label}”.`);
     if (comment.length < 4) return setError('Add a short comment.');
-    if (!(await run(() => api('/reviews', { body: { tutorId, rating: stars, comment, sessionId } })))) return;
+    if (!(await run(() => api('/reviews', { body: { tutorId, rating: stars, criteria, comment, sessionId } })))) return;
     onClose();
     toast(`Thanks. Your anonymous review is on ${tutorName.split(' ')[0]}’s profile.`);
   }
@@ -211,6 +214,29 @@ export function RateModal({ tutorId, tutorName, sessionId, onClose }: { tutorId:
             </button>
           ))}
           <span className="muted" style={{ marginLeft: 10 }}>{RATING_LABELS[stars] || 'Choose a rating'}</span>
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(120px, auto) 1fr', gap: '6px 14px', alignItems: 'center' }}>
+          {CRITERIA.map((c) => (
+            <div key={c.key} style={{ display: 'contents' }}>
+              <span style={{ fontSize: 14 }}>{c.label}</span>
+              <div className="row" role="radiogroup" aria-label={c.label} style={{ gap: 0 }}>
+                {[1, 2, 3, 4, 5].map((n) => (
+                  <button
+                    key={n}
+                    type="button"
+                    role="radio"
+                    aria-checked={criteria[c.key] === n}
+                    aria-label={`${c.label}: ${n} of 5`}
+                    className="btn btn-ghost btn-icon"
+                    style={{ fontSize: 20, width: 30, height: 30, color: n <= (criteria[c.key] ?? 0) ? 'var(--cl-6)' : 'var(--color-neutral-500)' }}
+                    onClick={() => setCriteria({ ...criteria, [c.key]: n })}
+                  >
+                    {n <= (criteria[c.key] ?? 0) ? '★' : '☆'}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ))}
         </div>
         <Field label="Comment">
           <textarea className="input" name="comment" placeholder="What worked, and what could be better?" />

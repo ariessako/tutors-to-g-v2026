@@ -7,7 +7,7 @@ import { saveFile, type Ctx } from '../context';
 import { childIdsOf, logEvent, nowIso, uid } from '../services';
 import { reviewViews, sessionViews } from '../views';
 import { iso, slotDate, sortSlots } from '../../shared/format';
-import { GRADES, SESSION_HOURS, SESSION_MODES, SUBJECTS, WEEK } from '../../shared/vocab';
+import { CRITERIA, GRADES, SESSION_HOURS, SESSION_MODES, SUBJECTS, WEEK, type CriterionKey } from '../../shared/vocab';
 import type { ScoredTutor } from '../../shared/matching';
 
 const hoursSchema = z.number().refine((h) => (SESSION_HOURS as readonly number[]).includes(h), 'Choose a duration.');
@@ -376,6 +376,7 @@ export function sessionRoutes(ctx: Ctx) {
       .object({
         tutorId: z.string(),
         rating: z.number().int().min(1, 'Choose a star rating.').max(5),
+        criteria: z.object(Object.fromEntries(CRITERIA.map((c) => [c.key, z.number().int().min(1, `Rate “${c.label}”.`).max(5)])) as Record<CriterionKey, z.ZodNumber>, 'Rate each part of the session.'),
         comment: z.string().trim().min(4, 'Add a short comment.').max(2000),
         sessionId: z.string().optional(),
       })
@@ -403,7 +404,7 @@ export function sessionRoutes(ctx: Ctx) {
       )).get();
       if (previous) throw new HttpError(409, me.role === 'parent' ? 'You already reviewed this tutor.' : 'You already rated this session.');
       tx.insert(reviews)
-        .values({ id: uid('r_'), tutorId: d.tutorId, authorId: me.id, authorRole: me.role as 'student' | 'parent', rating: d.rating, comment: d.comment, anonymous: true, date: iso(new Date()), status: 'new', sessionId: session?.id ?? null })
+        .values({ id: uid('r_'), tutorId: d.tutorId, authorId: me.id, authorRole: me.role as 'student' | 'parent', rating: d.rating, criteria: d.criteria, comment: d.comment, anonymous: true, date: iso(new Date()), status: 'new', sessionId: session?.id ?? null })
         .run();
       if (session && me.role === 'student') tx.update(tutoringSessions).set({ rated: d.rating }).where(eq(tutoringSessions.id, session.id)).run();
     }, { behavior: 'immediate' });

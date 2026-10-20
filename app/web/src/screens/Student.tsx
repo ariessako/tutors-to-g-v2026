@@ -3,12 +3,12 @@ import { useQuery } from '@tanstack/react-query';
 import { Link, useNavigate, useParams } from 'react-router';
 import type { Me } from '../../../shared/types';
 import { avatar, fmtDate, fmtTime, hoursLabel, peso, stars } from '../../../shared/format';
-import { GRADES, SUBJECTS, WEEK } from '../../../shared/vocab';
+import { CRITERIA, GRADES, SUBJECTS, WEEK } from '../../../shared/vocab';
 import { api, useAction, useApi } from '../api';
 import { PAYMENT, SESSION, type LinkView } from '../labels';
 import { BookModal, PayModal, RateModal } from '../modals/StudentModals';
 import { SessionDetailsModal } from '../modals/SessionModals';
-import type { MatchesResponse, SessionView, StudentHome as Home, TutorCard, TutorProfileResponse } from '../types';
+import type { MatchesResponse, SessionView, StudentHome as Home, TutorCard, TutorProfileResponse, TutorStats } from '../types';
 import { Avatar, Bar, CardHead, DateTile, ErrorBox, Field, Icon, Loading, MatchRing, PageHead, Seg, Stat, Tag, useToast } from '../ui';
 
 export type StudentModal =
@@ -26,6 +26,25 @@ export function StudentModals({ modal, onClose }: { modal: StudentModal | null; 
 }
 
 const canPay = (x: SessionView) => (x.status === 'accepted' || x.status === 'completed') && (x.payment.status === 'unpaid' || x.payment.status === 'rejected');
+
+/** Average per rating criterion as labelled bars. Renders nothing until some review rated them. */
+export function CriteriaBars({ stats }: { stats: TutorStats }) {
+  if (!CRITERIA.some((c) => stats.criteria[c.key] != null)) return null;
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: 'minmax(110px, auto) 1fr 32px', gap: '6px 12px', alignItems: 'center', minWidth: 240, flex: 1 }}>
+      {CRITERIA.map((c) => {
+        const v = stats.criteria[c.key];
+        return (
+          <div key={c.key} style={{ display: 'contents' }}>
+            <span className="muted" style={{ fontSize: 12 }}>{c.label}</span>
+            <Bar pct={((v ?? 0) / 5) * 100} variant="thin" />
+            <span style={{ fontSize: 12, fontWeight: 600, textAlign: 'right' }}>{v?.toFixed(1) ?? '—'}</span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
 
 export function PayTag({ x }: { x: SessionView }) {
   const p = PAYMENT[x.payment.status];
@@ -469,6 +488,7 @@ export function TutorProfile({ me }: { me: Me }) {
                 {stats.count > 0 && <span style={{ color: 'var(--cl-6)', letterSpacing: '.05em' }}>{stars(stats.avg)}</span>}
               </div>
               <RatingDist stats={stats} />
+              <CriteriaBars stats={stats} />
             </div>
             {!reviews.length && <p className="muted" style={{ padding: 20 }}>No reviews yet.</p>}
             <div className="divided">

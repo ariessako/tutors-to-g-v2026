@@ -10,7 +10,7 @@ import { attempt, ConfirmModal, type ConfirmSpec } from '../modals/Confirm';
 import { ATTENDANCE, CompleteModal, SessionDetailsModal } from '../modals/SessionModals';
 import type { ApplicationView, ReviewView, SessionView, TutorStats } from '../types';
 import { Avatar, CardHead, DateTile, ErrorBox, Icon, Loading, PageHead, Stat, Tag, useToast } from '../ui';
-import { PayTag, RatingDist } from './Student';
+import { CriteriaBars, PayTag, RatingDist } from './Student';
 
 interface Dashboard {
   stats: { requests: number; upcoming: number; upcomingPaid: number; avg: number; count: number };
@@ -426,6 +426,7 @@ export function TutorReviews() {
           </div>
         </div>
         <RatingDist stats={stats} thick />
+        <CriteriaBars stats={stats} />
       </div>
       <div className="card card-clip">
         {!reviews.length && <p className="muted" style={{ padding: 20 }}>No reviews yet.</p>}

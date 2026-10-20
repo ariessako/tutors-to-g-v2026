@@ -4,6 +4,7 @@ import type { Db } from './db';
 import { applications, parentLinks, reviews, sessionEvents, settings as settingsTable, users } from './db/schema';
 import { cluster, matchesFor, type ClusterResult, type PersonInput } from '../shared/matching';
 import type { SessionEventKind, Settings } from '../shared/types';
+import { CRITERIA, type CriterionKey } from '../shared/vocab';
 
 export const uid = (prefix: string) => prefix + randomBytes(6).toString('base64url');
 export const nowIso = () => new Date().toISOString();
@@ -24,7 +25,11 @@ export interface TutorStats {
   count: number;
   /** Counts of 5★ down to 1★. */
   dist: number[];
+  /** Average per criterion, null when no review rated it yet. */
+  criteria: Record<CriterionKey, number | null>;
 }
+
+const noCriteria = (): Record<CriterionKey, number | null> => Object.fromEntries(CRITERIA.map((c) => [c.key, null])) as Record<CriterionKey, number | null>;
 
 /**
  * Matching and aggregate helpers. Clustering results are cached until any
@@ -78,19 +83,30 @@ export function createServices(db: Db) {
   /** Rating stats per tutor, counting only reviews that aren't hidden. */
   function allTutorStats(): Map<string, TutorStats> {
     const out = new Map<string, TutorStats>();
-    const rows = db.select({ tutorId: reviews.tutorId, rating: reviews.rating }).from(reviews).where(eq(reviews.hidden, false)).all();
+    const rows = db.select({ tutorId: reviews.tutorId, rating: reviews.rating, criteria: reviews.criteria }).from(reviews).where(eq(reviews.hidden, false)).all();
+    const sums = new Map<string, Record<CriterionKey, [number, number]>>();
     for (const r of rows) {
       let s = out.get(r.tutorId);
-      if (!s) out.set(r.tutorId, (s = { avg: 0, count: 0, dist: [0, 0, 0, 0, 0] }));
+      if (!s) out.set(r.tutorId, (s = { avg: 0, count: 0, dist: [0, 0, 0, 0, 0], criteria: noCriteria() }));
       s.avg += r.rating;
       s.count++;
       s.dist[5 - r.rating]++;
+      let c = sums.get(r.tutorId);
+      if (!c) sums.set(r.tutorId, (c = Object.fromEntries(CRITERIA.map((x) => [x.key, [0, 0]])) as Record<CriterionKey, [number, number]>));
+      for (const { key } of CRITERIA) {
+        const v = r.criteria?.[key];
+        if (v) { c[key][0] += v; c[key][1]++; }
+      }
     }
-    for (const s of out.values()) s.avg = Math.round((s.avg / s.count) * 10) / 10;
+    for (const [id, s] of out) {
+      s.avg = Math.round((s.avg / s.count) * 10) / 10;
+      const c = sums.get(id)!;
+      for (const { key } of CRITERIA) s.criteria[key] = c[key][1] ? Math.round((c[key][0] / c[key][1]) * 10) / 10 : null;
+    }
     return out;
   }
 
-  const tutorStats = (tutorId: string): TutorStats => allTutorStats().get(tutorId) ?? { avg: 0, count: 0, dist: [0, 0, 0, 0, 0] };
+  const tutorStats = (tutorId: string): TutorStats => allTutorStats().get(tutorId) ?? { avg: 0, count: 0, dist: [0, 0, 0, 0, 0], criteria: noCriteria() };
 
   return { bump, getSettings, pool, clusterNow, matches, allTutorStats, tutorStats };
 }

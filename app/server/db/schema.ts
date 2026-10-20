@@ -11,6 +11,7 @@ import type {
   SessionStatus,
   UserStatus,
 } from '../../shared/types';
+import type { CriterionKey } from '../../shared/vocab';
 
 export const users = sqliteTable('users', {
   id: text('id').primaryKey(),
@@ -153,6 +154,8 @@ export const reviews = sqliteTable('reviews', {
   authorId: text('author_id').references(() => users.id, { onDelete: 'set null' }),
   authorRole: text('author_role').$type<'student' | 'parent'>().notNull(),
   rating: integer('rating').notNull(),
+  /** 1-5 per criterion (clarity, patience, punctuality, preparation); null on reviews from before criteria existed. */
+  criteria: text('criteria', { mode: 'json' }).$type<Partial<Record<CriterionKey, number>>>(),
   comment: text('comment').notNull(),
   anonymous: integer('anonymous', { mode: 'boolean' }).notNull().default(false),
   date: text('date').notNull(),

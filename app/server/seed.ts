@@ -326,9 +326,14 @@ export async function seedDemo(db: Db, uploadsDir: string, today = new Date()) {
   // Reviews
   const revRows: (typeof t.reviews.$inferInsert)[] = [];
   let rid = 0;
+  // Criteria scores sit around the overall rating, varied by review number (no random draws, so the dataset is unchanged).
+  const criteriaFor = (rating: number, n: number) => {
+    const at = (shift: number) => Math.max(1, Math.min(5, rating + shift));
+    return { clarity: at(n % 3 === 0 ? -1 : 0), patience: at(n % 2 ? 0 : 1), punctuality: at(n % 4 === 0 ? -1 : 0), preparation: at(n % 5 === 0 ? 1 : 0) };
+  };
   // Every review is anonymous. `_wasAnon` is kept so the random sequence (and the rest of the dataset) stays the same.
   const rv = (tutorId: string, authorId: string, rating: number, comment: string, _wasAnon: boolean, days: number, extra: Partial<typeof t.reviews.$inferInsert> = {}) =>
-    revRows.push({ id: `r${++rid}`, tutorId, authorId, authorRole: 'student', rating, comment, anonymous: true, date: dayAgo(days), status: rating <= 2 ? 'new' : 'reviewed', hidden: false, note: '', ...extra });
+    revRows.push({ id: `r${++rid}`, tutorId, authorId, authorRole: 'student', rating, criteria: criteriaFor(rating, rid), comment, anonymous: true, date: dayAgo(days), status: rating <= 2 ? 'new' : 'reviewed', hidden: false, note: '', ...extra });
   rv('t_paolo', 's3', 5, 'We talk about basketball for five minutes before every session, so I actually look forward to Math now.', false, 4);
   rv('t_paolo', 's11', 5, "The 4A's format makes every lesson easy to follow. Very patient.", true, 11);
   rv('t_paolo', 'p_liza', 5, 'Kind and approachable. Bea opened up quickly and her Math grade went up this quarter.', false, 16, { authorRole: 'parent' });

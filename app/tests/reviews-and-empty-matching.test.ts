@@ -16,7 +16,7 @@ let app: ReturnType<typeof serve>;
 let dir: string;
 let passwordHash: string;
 const profile = { hobbies: ['Coding', 'Anime', 'Music'], learning: 'Visual', social: 0.3, approach: 0.8, subjects: ['Math'], sched: ['Weekends'], grades: ['Senior High'] };
-const review = { tutorId: 't1', rating: 4, comment: 'Helpful explanations', anonymous: false };
+const review = { tutorId: 't1', rating: 4, criteria: { clarity: 5, patience: 4, punctuality: 3, preparation: 4 }, comment: 'Helpful explanations' };
 
 beforeAll(async () => { passwordHash = await hashPassword('test123'); });
 beforeEach(() => {
@@ -99,6 +99,21 @@ describe('review limits', () => {
       expect(responses.map((r) => r.status).sort()).toEqual([201, 409]);
       expect(db.select().from(reviews).all()).toHaveLength(1);
     } finally { await close(otherApp); secondDb.$client.close(); }
+  });
+});
+
+describe('review criteria', () => {
+  it('requires every criterion and averages them per tutor', async () => {
+    session();
+    session('second-lesson');
+    const student = await as('s1');
+    const { criteria: _drop, ...noCriteria } = review;
+    expect((await student.post('/api/reviews').send({ ...noCriteria, sessionId: 'lesson' })).status).toBe(400);
+    expect((await student.post('/api/reviews').send({ ...review, criteria: { ...review.criteria, patience: 0 }, sessionId: 'lesson' })).status).toBe(400);
+    expect((await student.post('/api/reviews').send({ ...review, sessionId: 'lesson' })).status).toBe(201);
+    expect((await student.post('/api/reviews').send({ ...review, criteria: { clarity: 4, patience: 4, punctuality: 5, preparation: 2 }, sessionId: 'second-lesson' })).status).toBe(201);
+    const stats = (await student.get('/api/tutors/t1')).body.stats;
+    expect(stats.criteria).toEqual({ clarity: 4.5, patience: 4, punctuality: 4, preparation: 3 });
   });
 });
 
