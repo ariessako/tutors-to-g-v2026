@@ -1,7 +1,8 @@
 /** Shapes database rows into the JSON the web client renders. */
 import { eq, inArray } from 'drizzle-orm';
 import type { Db } from './db';
-import { applications, reviews, sessionEvents, tutoringSessions, users } from './db/schema';
+import { applications, payments, reviews, sessionEvents, tutoringSessions, users } from './db/schema';
+import { paymentState } from './payments';
 import type { User } from './auth';
 import type { Me } from '../shared/types';
 import { sortSlots } from '../shared/format';
@@ -14,6 +15,9 @@ export function meDto(db: Db, u: User): Me {
   if (u.role === 'teacher') {
     const app = db.select({ status: applications.status }).from(applications).where(eq(applications.userId, u.id)).get();
     tutor = {
+      allowInstallments: u.allowInstallments,
+      maxInstallments: u.maxInstallments,
+      minFirstPercent: u.minFirstPercent,
       licenseType: u.licenseType ?? 'licensed',
       eligibility: u.eligibility ?? null,
       headline: u.headline ?? '',
@@ -52,8 +56,13 @@ export function nameMap(db: Db, ids: (string | null | undefined)[]) {
 export function sessionViews(db: Db, rows: SessionRow[]) {
   const ids = rows.map((r) => r.id);
   const events = ids.length ? db.select().from(sessionEvents).where(inArray(sessionEvents.sessionId, ids)).all() : [];
+  const receipts = ids.length ? db.select().from(payments).where(inArray(payments.sessionId, ids)).all() : [];
   const who = nameMap(db, [...rows.flatMap((r) => [r.studentId, r.tutorId]), ...events.map((e) => e.actorId)]);
-  return rows.map((r) => ({
+  return rows.map((r) => sessionView(r, receipts.filter((p) => p.sessionId === r.id).sort((a, b) => a.part - b.part || (a.uploadedAt < b.uploadedAt ? -1 : 1))));
+
+  function sessionView(r: SessionRow, mine: (typeof payments.$inferSelect)[]) {
+    const state = paymentState(r, mine);
+    return {
     id: r.id,
     studentId: r.studentId,
     tutorId: r.tutorId,
@@ -80,14 +89,13 @@ export function sessionViews(db: Db, rows: SessionRow[]) {
       .sort((a, b) => (a.at < b.at ? -1 : a.at > b.at ? 1 : a.id - b.id))
       .map((e) => ({ at: e.at, kind: e.kind, by: e.actorId ? who(e.actorId).name : null, detail: e.detail })),
     payment: {
-      status: r.paymentStatus,
-      reference: r.paymentRef,
-      receiptName: r.receiptName,
-      receiptFileId: r.receiptFileId,
-      amountPaid: r.amountPaid,
-      at: r.receiptAt,
+      ...state,
+      planParts: r.planParts,
+      planMinFirstPct: r.planMinFirstPct,
+      receipts: mine.map((p) => ({ id: p.id, part: p.part, amount: p.amount, reference: p.reference, receiptName: p.receiptName, receiptFileId: p.receiptFileId, status: p.status, uploadedAt: p.uploadedAt, reviewedAt: p.reviewedAt })),
     },
-  }));
+  };
+  }
 }
 export type SessionView = ReturnType<typeof sessionViews>[number];
 

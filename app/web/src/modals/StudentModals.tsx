@@ -117,42 +117,64 @@ export function BookModal({ tutorId, onClose }: { tutorId: string; onClose: () =
 
 /**
  * Payment: the student pays outside the app by any method, then uploads the
- * receipt (with an optional reference number) for an admin to verify.
+ * receipt for an admin to verify. When the tutor allowed installments at
+ * booking time, the student can pay in full or send the next part.
  */
 export function PayModal({ session: x, onClose }: { session: SessionView; onClose: () => void }) {
-  const rejected = x.payment.status === 'rejected';
+  const p = x.payment;
+  const lastRejected = p.receipts.at(-1)?.status === 'rejected';
+  const [plan, setPlan] = useState<'full' | 'installment'>(p.installments && p.paid > 0 ? 'installment' : 'full');
   const [file, setFile] = useState<File | null>(null);
   const { run, error, setError, busy } = useAction();
   const toast = useToast();
+  const full = plan === 'full' || !p.installments;
+  const min = full ? p.balance : p.minNext;
+  const last = !full && p.nextPart >= p.planParts;
 
   async function submit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const fd = new FormData(e.currentTarget);
     const reference = String(fd.get('reference') ?? '').trim();
-    const amount = Number(fd.get('amount'));
+    const amount = full ? p.balance : Number(fd.get('amount'));
     if (!file) return setError('Attach your receipt.');
     if (!(amount > 0)) return setError('Enter the amount you paid.');
+    if (amount > p.balance) return setError(`The balance is ${peso(p.balance)}. Enter that amount or less.`);
+    if (amount < min) return setError(last ? `This is the last installment: pay the ${peso(p.balance)} balance.` : `The first installment is at least ${peso(min)}.`);
     const form = new FormData();
     form.set('receipt', file);
     form.set('reference', reference);
     form.set('amount', String(amount));
+    form.set('plan', full ? 'full' : 'installment');
     if (!(await run(() => api(`/sessions/${x.id}/receipt`, { form })))) return;
     onClose();
-    toast('Receipt submitted. An admin will confirm your payment.');
+    toast(full ? 'Receipt submitted. An admin will confirm your payment.' : `Installment ${p.nextPart} submitted. An admin will confirm it; the rest stays as your balance.`);
   }
 
   return (
     <Modal onClose={onClose} label="Pay for your session">
       <form onSubmit={submit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
         <div className="dialog-title">Upload your receipt</div>
-        {rejected && <div className="alert alert-bad"><Icon name="warning-circle" />Your last receipt was rejected. Upload a clearer copy or check the amount.</div>}
+        {lastRejected && <div className="alert alert-bad"><Icon name="warning-circle" />Your last receipt was rejected. Upload a clearer copy or check the amount.</div>}
         <dl style={{ display: 'grid', gridTemplateColumns: '120px minmax(0,1fr)', gap: '8px 16px', margin: 0, fontSize: 14 }}>
           <dt className="muted">Tutor</dt><dd style={{ margin: 0 }}>{x.tutor}</dd>
           <dt className="muted">Session</dt><dd style={{ margin: 0 }}>{x.subject} · {fmtDate(x.date)}, {fmtTime(x.time)}</dd>
           <dt className="muted">Duration</dt><dd style={{ margin: 0 }}>{hoursLabel(x.hours, true)}</dd>
-          <dt className="muted">Amount due</dt><dd style={{ margin: 0, fontWeight: 700 }}>{peso(x.amount)}</dd>
+          <dt className="muted">Session fee</dt><dd style={{ margin: 0 }}>{peso(x.amount)}</dd>
+          {p.paid > 0 && <><dt className="muted">Paid so far</dt><dd style={{ margin: 0 }}>{peso(p.paid)}</dd></>}
+          <dt className="muted">Balance</dt><dd style={{ margin: 0, fontWeight: 700 }}>{peso(p.balance)}</dd>
         </dl>
-        <p className="dialog-body">Upload the receipt for your payment. An admin checks it before the session is marked paid.</p>
+        {p.installments && (
+          <div className="field">
+            <span className="label">How are you paying?</span>
+            <Seg label="Payment plan" value={plan} onChange={setPlan} options={[{ value: 'full', label: p.paid > 0 ? 'Pay the balance' : 'Pay in full' }, { value: 'installment', label: `Installment ${p.nextPart} of up to ${p.planParts}` }]} />
+            {!full && (
+              <span className="muted" style={{ fontSize: 12 }}>
+                {last ? `This is the last installment allowed, so it must cover the ${peso(p.balance)} balance.` : p.nextPart === 1 ? `${x.tutor.split(' ')[0]} allows up to ${p.planParts} parts. The first is at least ${p.planMinFirstPct}% (${peso(p.minNext)}).` : `Pay any amount up to the ${peso(p.balance)} balance. You have up to ${p.planParts - p.nextPart + 1} parts left.`}
+              </span>
+            )}
+          </div>
+        )}
+        <p className="dialog-body">Upload the receipt for your payment. An admin checks it before it counts toward the session.</p>
         <Field label="Receipt (image or PDF, up to 10 MB)">
           <input className="input" type="file" accept="image/*,.pdf" style={{ padding: 6, height: 'auto' }} onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
         </Field>
@@ -161,7 +183,11 @@ export function PayModal({ session: x, onClose }: { session: SessionView; onClos
             <input className="input" name="reference" maxLength={40} style={{ fontFamily: 'ui-monospace, Menlo, monospace', fontSize: 13 }} autoComplete="off" />
           </Field>
           <Field label="Amount paid (₱)">
-            <input className="input" name="amount" type="number" min={1} step="any" defaultValue={x.amount} />
+            {full ? (
+              <input className="input" value={p.balance} readOnly aria-readonly />
+            ) : (
+              <input key={plan} className="input" name="amount" type="number" min={min} max={p.balance} step="0.01" defaultValue={last ? p.balance : min} readOnly={last} />
+            )}
           </Field>
         </div>
         <ErrorBox error={error} />

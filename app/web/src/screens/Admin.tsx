@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
-import type { AppStatus, PaymentStatus, Profile, TutorDetails } from '../../../shared/types';
+import type { AppStatus, Profile, TutorDetails } from '../../../shared/types';
 import { validateProfile } from '../../../shared/matching';
 import { WARNING_LIMIT } from '../../../shared/vocab';
 import { ELIGIBILITY, RATE_TIERS, tierFor, type Eligibility, type LicenseType } from '../../../shared/tiers';
@@ -606,27 +606,33 @@ export function AdminAccounts() {
 
 interface PaymentRow {
   id: string;
+  sessionId: string;
   student: string;
   tutor: string;
   subject: string;
   date: string;
+  due: number;
+  paid: number;
+  balance: number;
+  part: number;
+  planParts: number;
   amount: number;
-  amountPaid: number | null;
   reference: string | null;
   receiptName: string | null;
   receiptFileId: string | null;
-  at: string | null;
-  status: PaymentStatus;
+  at: string;
+  reviewedAt: string | null;
+  status: 'for_review' | 'approved' | 'rejected';
 }
-const PAY_LABEL: Record<string, { label: string; tone: 'ok' | 'bad' | 'warn' }> = {
+const PAY_LABEL: Record<PaymentRow['status'], { label: string; tone: 'ok' | 'bad' | 'warn' }> = {
   for_review: { label: 'For review', tone: 'warn' },
-  paid: { label: 'Approved', tone: 'ok' },
+  approved: { label: 'Received', tone: 'ok' },
   rejected: { label: 'Rejected', tone: 'bad' },
 };
 
 export function AdminPayments() {
   const q = useApi<{ payments: PaymentRow[] }>('/admin/payments');
-  const [filter, setFilter] = useState<'for_review' | 'paid' | 'rejected' | 'all'>('for_review');
+  const [filter, setFilter] = useState<PaymentRow['status'] | 'all'>('for_review');
   const [confirm, setConfirm] = useState<ConfirmSpec | null>(null);
   const { run, error } = useAction();
   const toast = useToast();
@@ -635,24 +641,24 @@ export function AdminPayments() {
   const all = q.data.payments;
   const list = all.filter((p) => filter === 'all' || p.status === filter);
   const approve = async (p: PaymentRow) => {
-    const r = await run(() => api<{ tutor: string }>(`/admin/payments/${p.id}`, { body: { approve: true } }));
-    if (r) toast(`Payment approved. ${r.tutor} now sees this session as paid.`);
+    const r = await run(() => api<{ tutor: string; status: string; balance: number }>(`/admin/payments/${p.id}`, { body: { approve: true } }));
+    if (r) toast(r.status === 'paid' ? `Payment received. ${r.tutor} now sees this session as paid.` : `Installment received. ${peso(r.balance)} is still due.`);
   };
   const reject = (p: PaymentRow) =>
     setConfirm({
-      title: 'Reject this payment?',
-      body: 'The student will be asked to upload a new receipt.',
+      title: p.planParts > 1 ? `Reject installment ${p.part}?` : 'Reject this payment?',
+      body: 'The student will be asked to upload a new receipt for this amount.',
       yes: 'Reject payment',
       action: attempt(() => api(`/admin/payments/${p.id}`, { body: { approve: false } }), () => toast('Payment rejected.')),
     });
   return (
     <section className="page" style={{ gap: 18 }}>
-      <PageHead title="Payments" sub="Check each receipt’s amount and reference number before approving. The tutor sees the session as paid once you approve." />
+      <PageHead title="Payments" sub="Each receipt is a full payment or one installment. Check the amount and reference number before approving; the student gets an acknowledgment and the session shows as paid once the balance reaches zero." />
       <Seg
         label="Payment status"
         value={filter}
         onChange={setFilter}
-        options={(['for_review', 'paid', 'rejected', 'all'] as const).map((k) => ({ value: k, label: `${k === 'all' ? 'All' : PAY_LABEL[k].label} · ${k === 'all' ? all.length : all.filter((p) => p.status === k).length}` }))}
+        options={(['for_review', 'approved', 'rejected', 'all'] as const).map((k) => ({ value: k, label: `${k === 'all' ? 'All' : PAY_LABEL[k].label} · ${k === 'all' ? all.length : all.filter((p) => p.status === k).length}` }))}
       />
       <ErrorBox error={error} />
       <div className="card card-clip">
@@ -661,18 +667,21 @@ export function AdminPayments() {
         ) : (
           <div className="table-scroll">
             <table className="table hover">
-              <thead><tr><th>Student → tutor</th><th>Session</th><th>Due</th><th>Reference no.</th><th>Receipt</th><th>Status</th><th /></tr></thead>
+              <thead><tr><th>Student → tutor</th><th>Session</th><th>This receipt</th><th>Session total</th><th>Reference no.</th><th>Receipt</th><th>Status</th><th /></tr></thead>
               <tbody>
                 {list.map((p) => {
-                  const short = p.amountPaid != null && p.amountPaid < p.amount;
                   const lab = PAY_LABEL[p.status];
                   return (
                     <tr key={p.id}>
                       <td><div className="row"><Avatar name={p.student} size={30} /><div><div style={{ fontWeight: 600 }}>{p.student}</div><div className="muted" style={{ fontSize: 12 }}>to {p.tutor}</div></div></div></td>
-                      <td><div>{p.subject} · {fmtDate(p.date)}</div><div className="muted" style={{ fontSize: 12 }}>{p.at ? `Uploaded ${fmtStamp(p.at)}` : ''}</div></td>
+                      <td><div>{p.subject} · {fmtDate(p.date)}</div><div className="muted" style={{ fontSize: 12 }}>Uploaded {fmtStamp(p.at)}</div></td>
                       <td>
                         <div style={{ fontWeight: 700 }}>{peso(p.amount)}</div>
-                        {short && <div className="row" style={{ gap: 4, fontSize: 12, color: 'var(--t-bad-fg)' }}><Icon name="warning" />Receipt shows {peso(p.amountPaid!)}</div>}
+                        <div className="muted" style={{ fontSize: 12 }}>{p.planParts > 1 ? `Installment ${p.part} of up to ${p.planParts}` : 'Full payment'}</div>
+                      </td>
+                      <td>
+                        <div>{peso(p.due)}</div>
+                        <div className="muted" style={{ fontSize: 12 }}>{peso(p.paid)} received · {p.balance > 0 ? `${peso(p.balance)} due` : 'paid'}</div>
                       </td>
                       <td style={{ fontFamily: 'ui-monospace, Menlo, monospace', fontSize: 12 }}>{p.reference ?? '—'}</td>
                       <td>
@@ -680,7 +689,7 @@ export function AdminPayments() {
                           <Icon name="paperclip" /><span className="ellipsis">{p.receiptName ?? '—'}</span>
                         </button>
                       </td>
-                      <td>{lab && <Tag tone={lab.tone} size="sm">{lab.label}</Tag>}</td>
+                      <td><Tag tone={lab.tone} size="sm">{lab.label}</Tag></td>
                       <td className="nowrap" style={{ textAlign: 'right' }}>
                         {p.status === 'for_review' && (
                           <>
@@ -688,6 +697,7 @@ export function AdminPayments() {
                             <button className="btn btn-secondary btn-xs" onClick={() => reject(p)}>Reject</button>
                           </>
                         )}
+                        {p.status === 'approved' && <a className="link" href={`/api/payments/${p.id}/acknowledgment.pdf`} download>Acknowledgment</a>}
                       </td>
                     </tr>
                   );

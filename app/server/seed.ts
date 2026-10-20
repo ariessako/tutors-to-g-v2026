@@ -225,6 +225,9 @@ export async function seedDemo(db: Db, uploadsDir: string, today = new Date()) {
       headline: 'Math and Science for Junior and Senior High',
       bio: "Licensed professional teacher (LPT) with six years at a public high school in Pasig. I teach with the 4A's — every lesson starts with an activity, usually a drawing or a quick game, before we get to the formula. I coach a barangay basketball team on weekends.",
       slots: ['Mon 17:00', 'Mon 18:00', 'Tue 17:00', 'Tue 18:00', 'Wed 18:00', 'Thu 17:00', 'Thu 19:00', 'Sat 09:00', 'Sat 10:00', 'Sat 11:00'],
+      allowInstallments: true,
+      maxInstallments: 3,
+      minFirstPercent: 40,
     },
   );
   approve(paolo.id, paolo.name);
@@ -278,13 +281,19 @@ export async function seedDemo(db: Db, uploadsDir: string, today = new Date()) {
 
   // Sessions
   const sessRows: (typeof t.tutoringSessions.$inferInsert)[] = [];
+  const paymentRows: (typeof t.payments.$inferInsert)[] = [];
   let sid = 0;
   const ses = (o: Omit<typeof t.tutoringSessions.$inferInsert, 'id' | 'createdAt'> & { createdAt?: string }) => {
     const row = { id: `ses${++sid}`, createdAt: stampAgo(14, 12), ...o };
     if (row.receiptName && row.receiptAt) {
       const lines = [`Paid by: ${byId(row.studentId).name}`, `Paid to: Tutors To Go`, `Amount: PHP ${(row.amountPaid ?? row.amount).toLocaleString('en-US')}`, `Date: ${row.receiptAt.slice(0, 10)}`];
       if (row.paymentRef) lines.push(`Reference no.: ${row.paymentRef}`);
-      row.receiptFileId = mockFile(row.studentId, row.receiptName, row.receiptAt, 'Payment receipt', lines);
+      const receiptFileId = mockFile(row.studentId, row.receiptName, row.receiptAt, 'Payment receipt', lines);
+      paymentRows.push({
+        id: `pay_${row.id}`, sessionId: row.id, part: 1, amount: row.amountPaid ?? row.amount, reference: row.paymentRef ?? null, receiptFileId, receiptName: row.receiptName,
+        status: row.paymentStatus === 'paid' ? 'approved' : row.paymentStatus === 'rejected' ? 'rejected' : 'for_review',
+        uploadedAt: row.receiptAt, reviewedAt: row.reviewedAt ?? null, reviewedBy: row.reviewedAt ? 'admin' : null,
+      });
     }
     if (row.status === 'completed' && !row.completedAt) {
       const [h, m] = row.slot.split(' ')[1].split(':').map(Number);
@@ -300,7 +309,7 @@ export async function seedDemo(db: Db, uploadsDir: string, today = new Date()) {
     const u = byId(id);
     return u.gradeLabel ? `${u.name}, ${u.gradeLabel}` : u.name;
   };
-  ses({ studentId: 's_bea', tutorId: 't_paolo', subject: 'Math', date: upcoming('Tue 17:00'), slot: 'Tue 17:00', hours: 1.5, mode: 'Online (Google Meet)', topic: 'Quadratic equations: factoring and word problems', learner: 'Bea Santos, Grade 10', guardian: 'Liza Santos · 0917 555 0142', status: 'accepted', amount: 675 });
+  ses({ studentId: 's_bea', tutorId: 't_paolo', subject: 'Math', date: upcoming('Tue 17:00'), slot: 'Tue 17:00', hours: 1.5, mode: 'Online (Google Meet)', topic: 'Quadratic equations: factoring and word problems', learner: 'Bea Santos, Grade 10', guardian: 'Liza Santos · 0917 555 0142', status: 'accepted', amount: 675, planParts: 3, planMinFirstPct: 40 });
   ses({ studentId: 's_bea', tutorId: 't_paolo', subject: 'Math', date: lastWeek('Tue 17:00'), slot: 'Tue 17:00', hours: 1.5, mode: 'Online (Google Meet)', topic: 'Systems of linear equations', topicsCovered: 'Substitution and elimination methods; mixture word problems', sessionNotes: 'Homework: worksheet 3, items 1-10. Bea is confident with substitution; keep practising elimination.', learner: 'Bea Santos, Grade 10', status: 'completed', amount: 675, paymentStatus: 'paid', paymentRef: '5TY20931KD448722N', receiptName: 'receipt-bank-transfer.pdf', amountPaid: 675, receiptAt: stampAgo(7, 19, 12), reviewedAt: stampAgo(6, 9) });
   ses({ studentId: 's_bea', tutorId: sci.id, subject: 'Science', date: upcoming('Thu 18:00'), slot: 'Thu 18:00', hours: 1, mode: 'Online (Google Meet)', topic: 'Chemical reactions and balancing equations', learner: 'Bea Santos, Grade 10', status: 'pending', amount: sci.rate! });
   ses({ studentId: 's_bea', tutorId: 't_paolo', subject: 'Science', date: upcoming('Sat 10:00'), slot: 'Sat 10:00', hours: 1, mode: 'In-person', topic: 'Electricity and circuits review', learner: 'Bea Santos, Grade 10', status: 'accepted', amount: 450, paymentStatus: 'for_review', paymentRef: '8XK29341LM002144', receiptName: 'receipt-gcash.pdf', amountPaid: 450, receiptAt: stampAgo(1, 20, 5) });
@@ -405,7 +414,7 @@ export async function seedDemo(db: Db, uploadsDir: string, today = new Date()) {
 
   const oldFiles = db.select({ storedName: t.files.storedName }).from(t.files).all();
   db.transaction((tx) => {
-    for (const table of [t.warnings, t.sessionEvents, t.parentLinks, t.posts, t.threads, t.groupInvites, t.groupMembers, t.groups, t.reviews, t.tutoringSessions, t.applicationHistory, t.applicationDocs, t.applications, t.authSessions, t.files, t.settings, t.users]) {
+    for (const table of [t.payments, t.warnings, t.sessionEvents, t.parentLinks, t.posts, t.threads, t.groupInvites, t.groupMembers, t.groups, t.reviews, t.tutoringSessions, t.applicationHistory, t.applicationDocs, t.applications, t.authSessions, t.files, t.settings, t.users]) {
       tx.delete(table).run();
     }
     tx.run(sql`DELETE FROM sqlite_sequence`);
@@ -416,7 +425,10 @@ export async function seedDemo(db: Db, uploadsDir: string, today = new Date()) {
     tx.insert(t.applications).values(appRows).run();
     tx.insert(t.applicationDocs).values(docRows).run();
     tx.insert(t.applicationHistory).values(histRows).run();
-    for (let i = 0; i < sessRows.length; i += 50) tx.insert(t.tutoringSessions).values(sessRows.slice(i, i + 50)).run();
+    // The single-receipt columns are legacy; receipts live in `payments`.
+    const sessions = sessRows.map(({ paymentRef: _r, receiptName: _n, receiptFileId: _f, amountPaid: _a, receiptAt: _u, reviewedAt: _v, ...x }) => x);
+    for (let i = 0; i < sessions.length; i += 50) tx.insert(t.tutoringSessions).values(sessions.slice(i, i + 50)).run();
+    for (let i = 0; i < paymentRows.length; i += 50) tx.insert(t.payments).values(paymentRows.slice(i, i + 50)).run();
     for (let i = 0; i < eventRows.length; i += 100) tx.insert(t.sessionEvents).values(eventRows.slice(i, i + 100)).run();
     for (let i = 0; i < revRows.length; i += 50) tx.insert(t.reviews).values(revRows.slice(i, i + 50)).run();
     tx.insert(t.groups).values(groupRows).run();

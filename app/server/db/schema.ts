@@ -6,6 +6,7 @@ import type {
   LinkStatus,
   PaymentStatus,
   Profile,
+  ReceiptStatus,
   ReviewStatus,
   Role,
   SessionStatus,
@@ -41,6 +42,9 @@ export const users = sqliteTable('users', {
   curricula: text('curricula', { mode: 'json' }).$type<string[]>(),
   method: text('method'),
   slots: text('slots', { mode: 'json' }).$type<string[]>(),
+  allowInstallments: integer('allow_installments', { mode: 'boolean' }).notNull().default(false),
+  maxInstallments: integer('max_installments').notNull().default(2),
+  minFirstPercent: integer('min_first_percent').notNull().default(50),
 });
 
 export const authSessions = sqliteTable('auth_sessions', {
@@ -110,6 +114,10 @@ export const tutoringSessions = sqliteTable('tutoring_sessions', {
   rated: integer('rated').notNull().default(0),
   createdAt: text('created_at').notNull(),
   paymentStatus: text('payment_status').$type<PaymentStatus>().notNull().default('unpaid'),
+  /** Installment terms copied from the tutor when the session was requested: 1 part means pay in full. */
+  planParts: integer('plan_parts').notNull().default(1),
+  planMinFirstPct: integer('plan_min_first_pct').notNull().default(100),
+  // Legacy single-receipt columns, copied into `payments` by migration 0009 and no longer written.
   /** Optional reference number from the receipt. */
   paymentRef: text('payment_txn'),
   receiptName: text('receipt_name'),
@@ -123,6 +131,21 @@ export const tutoringSessions = sqliteTable('tutoring_sessions', {
   topicsCovered: text('topics_covered'),
   sessionNotes: text('session_notes'),
   completedAt: text('completed_at'),
+});
+
+/** Receipts uploaded for a session: one for a full payment, one per installment otherwise. */
+export const payments = sqliteTable('payments', {
+  id: text('id').primaryKey(),
+  sessionId: text('session_id').notNull().references(() => tutoringSessions.id, { onDelete: 'cascade' }),
+  part: integer('part').notNull(),
+  amount: real('amount').notNull(),
+  reference: text('reference'),
+  receiptFileId: text('receipt_file_id').references(() => files.id, { onDelete: 'set null' }),
+  receiptName: text('receipt_name').notNull(),
+  status: text('status').$type<ReceiptStatus>().notNull().default('for_review'),
+  uploadedAt: text('uploaded_at').notNull(),
+  reviewedAt: text('reviewed_at'),
+  reviewedBy: text('reviewed_by').references(() => users.id, { onDelete: 'set null' }),
 });
 
 /** Warnings an admin issued to a user. Removed warnings stay on record but don't count. */

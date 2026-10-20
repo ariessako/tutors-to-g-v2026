@@ -6,7 +6,10 @@ export type UserStatus = 'active' | 'deactivated' | 'banned';
 export type AppStatus = 'draft' | 'pending' | 'needs_changes' | 'approved' | 'rejected';
 export type SessionStatus = 'pending' | 'accepted' | 'declined' | 'completed';
 export type LinkStatus = 'pending_student' | 'pending_admin' | 'approved' | 'declined';
-export type PaymentStatus = 'unpaid' | 'for_review' | 'paid' | 'rejected';
+/** A session's overall payment state, derived from its receipts. `partial`: some installments received, balance left. */
+export type PaymentStatus = 'unpaid' | 'for_review' | 'partial' | 'paid' | 'rejected';
+/** One uploaded receipt (a full payment or one installment). */
+export type ReceiptStatus = 'for_review' | 'approved' | 'rejected';
 export type Attendance = 'present' | 'late' | 'no_show';
 /** Things that happen to a session, logged in order for its timeline. */
 export type SessionEventKind =
@@ -41,6 +44,10 @@ export interface TutorDetails {
   curricula: string[];
   method: string;
   bio: string;
+  /** Whether students may pay this tutor's sessions in parts, how many at most, and the smallest first part (% of the total). */
+  allowInstallments: boolean;
+  maxInstallments: number;
+  minFirstPercent: number;
 }
 
 export interface Settings {

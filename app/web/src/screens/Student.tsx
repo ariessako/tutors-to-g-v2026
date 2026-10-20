@@ -26,7 +26,7 @@ export function StudentModals({ modal, onClose }: { modal: StudentModal | null; 
   return <RateModal tutorId={modal.tutorId} tutorName={modal.tutorName} sessionId={modal.sessionId} onClose={onClose} />;
 }
 
-const canPay = (x: SessionView) => (x.status === 'accepted' || x.status === 'completed') && (x.payment.status === 'unpaid' || x.payment.status === 'rejected');
+const canPay = (x: SessionView) => x.payment.canPay;
 
 /** Average per rating criterion as labelled bars. Renders nothing until some review rated them. */
 export function CriteriaBars({ stats }: { stats: TutorStats }) {
@@ -54,7 +54,7 @@ export function LicenseTag({ license }: { license: LicenseType }) {
 
 export function PayTag({ x }: { x: SessionView }) {
   const p = PAYMENT[x.payment.status];
-  return <Tag tone={p.tone} icon={p.icon}>{p.label}</Tag>;
+  return <Tag tone={p.tone} icon={p.icon}>{p.label}{x.payment.status === 'partial' ? ` · ${peso(x.payment.balance)} left` : ''}</Tag>;
 }
 
 export const Shared = ({ items }: { items: string[] }) => (
@@ -185,6 +185,23 @@ export function StudentHome({ me }: { me: Me }) {
           ))}
         </div>
       </div>
+      {h.received.length > 0 && (
+        <div className="card">
+          <CardHead icon="check-circle" title="Payments received" sub="An admin confirmed these payments in the last week." />
+          <div className="divided">
+            {h.received.map((p) => (
+              <div key={p.id} className="row wrap" style={{ gap: 12, padding: '12px 20px' }}>
+                <Icon name="check-circle" style={{ fontSize: 22, color: 'var(--t-ok-fg)' }} />
+                <div style={{ flex: 1, minWidth: 200 }}>
+                  <div style={{ fontWeight: 600 }}>{peso(p.amount)} received{p.planParts > 1 ? ` · installment ${p.part}` : ''}</div>
+                  <div className="muted" style={{ fontSize: 12 }}>{p.subject} with {p.tutor}, {fmtDate(p.date)} · {p.balance > 0 ? `${peso(p.balance)} balance left` : 'Fully paid'}</div>
+                </div>
+                <a className="btn btn-secondary btn-sm" href={`/api/payments/${p.id}/acknowledgment.pdf`} download><Icon name="download-simple" />Acknowledgment</a>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
       {h.toRate.length > 0 && (
         <div className="card">
           <CardHead icon="star" title="Rate your recent sessions" />

@@ -3,7 +3,7 @@
  * named, so the surrounding <form> reads them with readProfile/readTutor.
  */
 import { useState } from 'react';
-import { CURRICULA, GRADES, HOBBIES, HOBBY_MAX, HOBBY_MIN, LEARNING, METHODS, SCHED, SUBJECTS } from '../../shared/vocab';
+import { CURRICULA, FIRST_PAYMENT_PERCENTS, GRADES, HOBBIES, INSTALLMENT_PARTS, HOBBY_MAX, HOBBY_MIN, LEARNING, METHODS, SCHED, SUBJECTS } from '../../shared/vocab';
 import type { Profile, TutorDetails } from '../../shared/types';
 import { Field, Icon, Tag } from './ui';
 import { RATE_TIERS, SENIOR_YEARS, tierFor } from '../../shared/tiers';
@@ -40,6 +40,9 @@ export function readTutor(fd: FormData): TutorDetails {
     curricula: fd.getAll('curricula').map(String),
     method: String(fd.get('method') || METHODS[0]),
     bio: String(fd.get('bio') ?? '').trim(),
+    allowInstallments: fd.get('allowInstallments') === 'on',
+    maxInstallments: Number(fd.get('maxInstallments')) || 2,
+    minFirstPercent: Number(fd.get('minFirstPercent')) || 50,
   };
 }
 
@@ -72,7 +75,8 @@ export function ProfileFields({ mode, profile, tutor, details = false }: { mode:
     method: tutor?.method ?? '',
   }));
   const [over, setOver] = useState(false);
-  const t = { headline: '', rate: 400, years: 1, education: '', bio: '', licenseType: 'licensed' as const, eligibility: null, ...tutor };
+  const t = { headline: '', rate: 400, years: 1, education: '', bio: '', licenseType: 'licensed' as const, eligibility: null, allowInstallments: false, maxInstallments: 2, minFirstPercent: 50, ...tutor };
+  const [installments, setInstallments] = useState(t.allowInstallments);
   const [years, setYears] = useState(t.years);
   const band = RATE_TIERS[tierFor(t.licenseType, years)];
 
@@ -129,6 +133,26 @@ export function ProfileFields({ mode, profile, tutor, details = false }: { mode:
                 <Chip key={v} small name="method" value={v} type="radio" on={sel.method === v} onToggle={() => setSel({ ...sel, method: v })} />
               ))}
             </div>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <label className="row" style={{ gap: 10, cursor: 'pointer', fontSize: 14 }}>
+              <input type="checkbox" name="allowInstallments" checked={installments} onChange={(e) => setInstallments(e.target.checked)} style={{ accentColor: 'var(--color-accent)' }} />
+              <span><strong>Allow installment payments.</strong> Students can split a session’s fee into parts instead of paying it all at once.</span>
+            </label>
+            {installments && (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 14 }}>
+                <Field label="Up to how many parts">
+                  <select className="input sm" name="maxInstallments" defaultValue={t.maxInstallments}>
+                    {INSTALLMENT_PARTS.map((n) => <option key={n} value={n}>{n} installments</option>)}
+                  </select>
+                </Field>
+                <Field label="Smallest first payment">
+                  <select className="input sm" name="minFirstPercent" defaultValue={t.minFirstPercent}>
+                    {FIRST_PAYMENT_PERCENTS.map((n) => <option key={n} value={n}>{n}% of the fee</option>)}
+                  </select>
+                </Field>
+              </div>
+            )}
           </div>
           <Field label="Short bio">
             <textarea className="input" name="bio" defaultValue={t.bio} placeholder="Where you teach, how you run a lesson, what you do outside class." maxLength={2000} />

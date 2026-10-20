@@ -15,6 +15,7 @@ import { adminRoutes } from './routes/admin';
 import { labRoutes } from './routes/lab';
 import { linkRoutes } from './routes/links';
 import { warningRoutes } from './routes/warnings';
+import { paymentRoutes } from './routes/payments';
 
 export interface AppOptions {
   db: Db;
@@ -40,7 +41,7 @@ export function createApp({ db, uploadsDir, demo }: AppOptions) {
   });
 
   const api = express.Router();
-  for (const routes of [authRoutes, sessionRoutes, teacherRoutes, groupRoutes, adminRoutes, labRoutes, linkRoutes, warningRoutes]) api.use(routes(ctx));
+  for (const routes of [authRoutes, sessionRoutes, teacherRoutes, groupRoutes, adminRoutes, labRoutes, linkRoutes, warningRoutes, paymentRoutes]) api.use(routes(ctx));
   api.use((_req, _res, next) => next(new HttpError(404, 'Not found.')));
   app.use('/api', api);
 

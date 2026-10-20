@@ -145,41 +145,105 @@ describe('booking and payment flow', () => {
     expect(tutorPending.body.sessions.find((s: { id: string }) => s.id === req.body.id).payment.status).toBe('for_review');
     const duplicateReceipt = await bea.post(`/api/sessions/${req.body.id}/receipt`).field('amount', '450').attach('receipt', PDF, { filename: 'duplicate.pdf', contentType: 'application/pdf' });
     expect(duplicateReceipt.status).toBe(409);
-    expect((await bea.post(`/api/admin/payments/${req.body.id}`).send({ approve: true })).status).toBe(403);
-
     const admin = await as('admin@tutorstogo.ph');
     const pays = await admin.get('/api/admin/payments');
-    const row = pays.body.payments.find((p: { id: string }) => p.id === req.body.id);
+    const row = pays.body.payments.find((p: { sessionId: string; status: string }) => p.sessionId === req.body.id && p.status === 'for_review');
+    expect((await bea.post(`/api/admin/payments/${row.id}`).send({ approve: true })).status).toBe(403);
     expect(row.status).toBe('for_review');
     expect(row.reference).toBeNull();
     expect((await admin.get(`/api/files/${row.receiptFileId}`)).status).toBe(200);
     expect((await bea.get(`/api/files/${row.receiptFileId}`)).status).toBe(200);
     expect((await paolo.get(`/api/files/${row.receiptFileId}`)).status).toBe(404);
 
-    expect((await admin.post(`/api/admin/payments/${req.body.id}`).send({ approve: false })).status).toBe(200);
+    expect((await admin.post(`/api/admin/payments/${row.id}`).send({ approve: false })).status).toBe(200);
     const rejected = await bea.get('/api/sessions');
     expect(rejected.body.sessions.find((s: { id: string }) => s.id === req.body.id).payment.status).toBe('rejected');
     const resubmit = await bea.post(`/api/sessions/${req.body.id}/receipt`).field('reference', 'CORRECTED123').field('amount', '450').attach('receipt', PDF, { filename: 'corrected.pdf', contentType: 'application/pdf' });
     expect(resubmit.status).toBe(200);
     const updatedPays = await admin.get('/api/admin/payments');
-    const updatedRow = updatedPays.body.payments.find((p: { id: string }) => p.id === req.body.id);
+    const updatedRow = updatedPays.body.payments.find((p: { sessionId: string; status: string }) => p.sessionId === req.body.id && p.status === 'for_review');
     expect(updatedRow.status).toBe('for_review');
     expect(updatedRow.reference).toBe('CORRECTED123');
     expect(updatedRow.receiptName).toBe('corrected.pdf');
     expect(updatedRow.receiptFileId).not.toBe(row.receiptFileId);
     expect((await admin.get(`/api/files/${updatedRow.receiptFileId}`)).status).toBe(200);
 
-    expect((await admin.post(`/api/admin/payments/${req.body.id}`).send({ approve: true })).status).toBe(200);
+    expect((await admin.post(`/api/admin/payments/${updatedRow.id}`).send({ approve: true })).status).toBe(200);
     const mine = await paolo.get('/api/sessions');
     expect(mine.body.sessions.find((s: { id: string }) => s.id === req.body.id).payment.status).toBe('paid');
     const studentPaid = await bea.get('/api/sessions');
     expect(studentPaid.body.sessions.find((s: { id: string }) => s.id === req.body.id).payment.status).toBe('paid');
-    expect((await admin.post(`/api/admin/payments/${req.body.id}`).send({ approve: true })).status).toBe(409);
+    expect((await admin.post(`/api/admin/payments/${updatedRow.id}`).send({ approve: true })).status).toBe(409);
+    expect((await bea.post(`/api/sessions/${req.body.id}/receipt`).field('amount', '450').attach('receipt', PDF, { filename: 'again.pdf', contentType: 'application/pdf' })).body.error).toMatch(/already paid/);
+  });
+
+  it('takes installments within the tutor’s terms and confirms each with an acknowledgment', async () => {
+    const bea = await as('bea@student.ph');
+    // Bea's Tuesday Math session with Paolo: PHP 675, up to 3 parts, first part at least 40%.
+    const s = (await bea.get('/api/sessions')).body.sessions.find((x: { status: string; amount: number; payment: { planParts: number } }) => x.status === 'accepted' && x.amount === 675 && x.payment.planParts === 3);
+    expect(s.payment).toMatchObject({ status: 'unpaid', balance: 675, nextPart: 1, minNext: 270, installments: true, canPay: true });
+    const send = (amount: number, plan = 'installment') =>
+      bea.post(`/api/sessions/${s.id}/receipt`).field('amount', String(amount)).field('plan', plan).attach('receipt', PDF, { filename: `part-${amount}.pdf`, contentType: 'application/pdf' });
+    expect((await send(200)).body.error).toMatch(/at least ₱270/);
+    expect((await send(300, 'full')).body.error).toMatch(/in full means ₱675/);
+    expect((await send(700)).body.error).toMatch(/balance is ₱675/);
+    expect((await send(300)).status).toBe(200);
+
+    const admin = await as('admin@tutorstogo.ph');
+    const pending = () => admin.get('/api/admin/payments').then((r) => r.body.payments.find((p: { sessionId: string; status: string }) => p.sessionId === s.id && p.status === 'for_review'));
+    const first = await pending();
+    expect(first).toMatchObject({ part: 1, planParts: 3, amount: 300, due: 675 });
+    const ok1 = await admin.post(`/api/admin/payments/${first.id}`).send({ approve: true });
+    expect(ok1.body).toMatchObject({ status: 'partial', balance: 375 });
+
+    const after = (await bea.get('/api/sessions')).body.sessions.find((x: { id: string }) => x.id === s.id).payment;
+    expect(after).toMatchObject({ status: 'partial', paid: 300, balance: 375, nextPart: 2, minNext: 1 });
+    expect(after.receipts).toHaveLength(1);
+    const home = (await bea.get('/api/student/home')).body.received;
+    expect(home.find((p: { id: string }) => p.id === first.id)).toMatchObject({ amount: 300, part: 1, balance: 375 });
+    const ack = await bea.get(`/api/payments/${first.id}/acknowledgment.pdf`);
+    expect(ack.status).toBe(200);
+    expect(ack.headers['content-type']).toBe('application/pdf');
+    expect(ack.body.toString('latin1')).toMatch(/Payment acknowledgment[\s\S]*PHP 300\.00[\s\S]*Balance: PHP 375\.00/);
+    const liza = await as('liza@parent.ph');
+    expect((await liza.get(`/api/payments/${first.id}/acknowledgment.pdf`)).status).toBe(200);
+    const stranger = await as('jen@tutor.ph');
+    expect((await stranger.get(`/api/payments/${first.id}/acknowledgment.pdf`)).status).toBe(404);
+
+    // Part 2 of 3 can be any amount; part 3 would have to clear the balance.
+    expect((await send(100)).status).toBe(200);
+    await admin.post(`/api/admin/payments/${(await pending()).id}`).send({ approve: true });
+    const third = (await bea.get('/api/sessions')).body.sessions.find((x: { id: string }) => x.id === s.id).payment;
+    expect(third).toMatchObject({ nextPart: 3, minNext: 275, balance: 275 });
+    expect((await send(100)).body.error).toMatch(/last installment/);
+    expect((await send(275)).status).toBe(200);
+    const last = await admin.post(`/api/admin/payments/${(await pending()).id}`).send({ approve: true });
+    expect(last.body).toMatchObject({ status: 'paid', balance: 0 });
+  });
+
+  it('only allows paying in full when the tutor doesn’t offer installments', async () => {
+    const bea = await as('bea@student.ph');
+    const admin = await as('admin@tutorstogo.ph');
+    const tutors = (await admin.get('/api/admin/tutors')).body.tutors as { id: string; email: string }[];
+    const other = tutors.find((t) => t.id !== 't_paolo')!;
+    const booking = (await bea.get(`/api/tutors/${other.id}/booking`)).body;
+    const slot = booking.slots.find((o: { taken: boolean }) => !o.taken);
+    const req = await bea.post('/api/sessions').send({ tutorId: other.id, subject: booking.subjects[0], date: slot.date, slot: slot.slot, hours: 1, mode: 'In-person', topic: 'Pay in full check' });
+    expect(req.status).toBe(201);
+    const tutor = await as(other.email);
+    expect((await tutor.post(`/api/sessions/${req.body.id}/respond`).send({ accept: true })).status).toBe(200);
+    const session = (await bea.get('/api/sessions')).body.sessions.find((x: { id: string }) => x.id === req.body.id);
+    expect(session.payment).toMatchObject({ planParts: 1, installments: false, minNext: session.amount });
+    const r = await bea.post(`/api/sessions/${req.body.id}/receipt`).field('amount', '100').field('plan', 'installment').attach('receipt', PDF, { filename: 'x.pdf', contentType: 'application/pdf' });
+    expect(r.body.error).toMatch(/doesn’t allow installments/);
+    const half = await bea.post(`/api/sessions/${req.body.id}/receipt`).field('amount', String(session.amount / 2)).attach('receipt', PDF, { filename: 'x.pdf', contentType: 'application/pdf' });
+    expect(half.body.error).toMatch(/in full/);
   });
 
   it('rejects non-PDF, non-image uploads', async () => {
     const bea = await as('bea@student.ph');
-    const s = (await bea.get('/api/sessions')).body.sessions.find((x: { status: string; payment: { status: string } }) => x.status === 'accepted' && x.payment.status === 'unpaid');
+    // The upload filter runs before the session is looked at, so any session will do.
+    const s = (await bea.get('/api/sessions')).body.sessions[0];
     const r = await bea.post(`/api/sessions/${s.id}/receipt`).field('amount', '675').attach('receipt', Buffer.from('hi'), { filename: 'x.exe', contentType: 'application/x-msdownload' });
     expect(r.status).toBe(400);
   });

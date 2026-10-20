@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from 'react';
-import type { Attendance, SessionEventKind } from '../../../shared/types';
-import { fmtDate, fmtStamp, fmtTime, hoursLabel } from '../../../shared/format';
+import type { Attendance, ReceiptStatus, SessionEventKind } from '../../../shared/types';
+import { fmtDate, fmtStamp, fmtTime, hoursLabel, peso } from '../../../shared/format';
 import { api, useAction } from '../api';
 import type { SessionView } from '../types';
 import { ErrorBox, Field, Icon, Modal, Seg, Tag, useToast } from '../ui';
@@ -9,6 +9,12 @@ export const ATTENDANCE: Record<Attendance, { label: string; tone: 'ok' | 'warn'
   present: { label: 'Attended', tone: 'ok' },
   late: { label: 'Late', tone: 'warn' },
   no_show: { label: 'No-show', tone: 'bad' },
+};
+
+const RECEIPT: Record<ReceiptStatus, { label: string; tone: 'ok' | 'warn' | 'bad' }> = {
+  for_review: { label: 'Under review', tone: 'warn' },
+  approved: { label: 'Received', tone: 'ok' },
+  rejected: { label: 'Rejected', tone: 'bad' },
 };
 
 const EVENT: Record<SessionEventKind, { label: string; icon: string }> = {
@@ -93,6 +99,22 @@ export function SessionDetailsModal({ session: x, onClose }: { session: SessionV
         </div>
       ) : (
         <p className="muted" style={{ fontSize: 13 }}>The tutor logs attendance and topics when the session is completed.</p>
+      )}
+      {(x.status === 'accepted' || x.status === 'completed') && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <div className="row wrap" style={{ gap: 8 }}>
+            <strong style={{ fontSize: 14 }}>Payments</strong>
+            <span className="muted" style={{ fontSize: 12 }}>{peso(x.payment.paid)} of {peso(x.amount)} received{x.payment.planParts > 1 ? ` · up to ${x.payment.planParts} installments` : ''}</span>
+          </div>
+          {!x.payment.receipts.length && <p className="muted" style={{ fontSize: 13 }}>No receipts uploaded yet.</p>}
+          {x.payment.receipts.map((r) => (
+            <div key={r.id} className="row wrap" style={{ gap: 10, fontSize: 13 }}>
+              <Tag tone={RECEIPT[r.status].tone} size="sm">{RECEIPT[r.status].label}</Tag>
+              <span style={{ flex: 1 }}>{x.payment.planParts > 1 ? `Installment ${r.part} · ` : ''}{peso(r.amount)} · uploaded {fmtStamp(r.uploadedAt)}{r.reviewedAt ? ` · reviewed ${fmtStamp(r.reviewedAt)}` : ''}</span>
+              {r.status === 'approved' && <a className="link" href={`/api/payments/${r.id}/acknowledgment.pdf`} download>Acknowledgment</a>}
+            </div>
+          ))}
+        </div>
       )}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
         <strong style={{ fontSize: 14 }}>Timeline</strong>

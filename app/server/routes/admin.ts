@@ -2,7 +2,8 @@ import { randomBytes } from 'node:crypto';
 import { Router } from 'express';
 import { and, eq, isNull, ne, sql } from 'drizzle-orm';
 import { z } from 'zod';
-import { applicationDocs, applicationHistory, applications, authSessions, parentLinks, reviews, settings, tutoringSessions, users, warnings } from '../db/schema';
+import { applicationDocs, applicationHistory, applications, authSessions, parentLinks, payments, reviews, settings, tutoringSessions, users, warnings } from '../db/schema';
+import { paymentState, receiptsFor, syncPaymentStatus } from '../payments';
 import { HttpError, hashPassword, requireUser } from '../auth';
 import { checkTutor, emailSchema, profileSchema, tutorDetailsSchema, type Ctx } from '../context';
 import { logEvent, nowIso, uid } from '../services';
@@ -24,7 +25,8 @@ export function adminRoutes(ctx: Ctx) {
   r.get('/admin/overview', (_req, res) => {
     const tutors = db.select({ id: users.id, name: users.name, profile: users.profile, status: applications.status }).from(users).innerJoin(applications, eq(applications.userId, users.id)).all();
     const pendingApps = tutors.filter((t) => t.status === 'pending');
-    const forReview = db.select().from(tutoringSessions).where(eq(tutoringSessions.paymentStatus, 'for_review')).all();
+    const forReview = db.select({ id: payments.id, file: payments.receiptName, amount: payments.amount, studentId: tutoringSessions.studentId })
+      .from(payments).innerJoin(tutoringSessions, eq(tutoringSessions.id, payments.sessionId)).where(eq(payments.status, 'for_review')).all();
     const flagged = db.select().from(reviews).all().filter(needsAttention);
     const people = db.select({ status: users.status, role: users.role }).from(users).where(ne(users.role, 'admin')).all();
     const links = db.select({ id: parentLinks.id }).from(parentLinks).where(eq(parentLinks.status, 'pending_admin')).all();
@@ -45,7 +47,7 @@ export function adminRoutes(ctx: Ctx) {
       },
       queue: {
         apps: pendingApps.slice(0, 4).map((t) => ({ id: t.id, name: t.name, subjects: t.profile?.subjects ?? [] })),
-        payments: forReview.slice(0, 4).map((x) => ({ id: x.id, student: who(x.studentId).name, amount: x.amount, file: x.receiptName })),
+        payments: forReview.slice(0, 4).map((x) => ({ id: x.id, student: who(x.studentId).name, amount: x.amount, file: x.file })),
         feedback: flagged.slice(0, 4).map((x) => ({ id: x.id, tutor: who(x.tutorId).name, rating: x.rating, comment: x.comment })),
       },
       model: { k: cl.km.centroids.length, approach: cl.settings.approach, nS: cl.nS, nT: cl.nT, iterations: cl.km.iterations },
@@ -222,34 +224,58 @@ export function adminRoutes(ctx: Ctx) {
   });
 
   // Payments
+  /** Every receipt, newest first, with the session's totals so admins can check each installment. */
   r.get('/admin/payments', (_req, res) => {
-    const rows = db.select().from(tutoringSessions).where(ne(tutoringSessions.paymentStatus, 'unpaid')).all().sort((a, b) => ((a.receiptAt ?? '') < (b.receiptAt ?? '') ? 1 : -1));
-    const who = nameMap(db, rows.flatMap((x) => [x.studentId, x.tutorId]));
+    const rows = db.select({ p: payments, s: tutoringSessions }).from(payments).innerJoin(tutoringSessions, eq(tutoringSessions.id, payments.sessionId)).all()
+      .sort((a, b) => (a.p.uploadedAt < b.p.uploadedAt ? 1 : -1));
+    const who = nameMap(db, rows.flatMap((x) => [x.s.studentId, x.s.tutorId]));
+    const states = new Map<string, ReturnType<typeof paymentState>>();
+    const stateOf = (s: typeof tutoringSessions.$inferSelect) => {
+      if (!states.has(s.id)) states.set(s.id, paymentState(s, receiptsFor(db, s.id)));
+      return states.get(s.id)!;
+    };
     res.json({
-      payments: rows.map((x) => ({
-        id: x.id,
-        student: who(x.studentId).name,
-        tutor: who(x.tutorId).name,
-        subject: x.subject,
-        date: x.date,
-        amount: x.amount,
-        amountPaid: x.amountPaid,
-        reference: x.paymentRef,
-        receiptName: x.receiptName,
-        receiptFileId: x.receiptFileId,
-        at: x.receiptAt,
-        status: x.paymentStatus,
-      })),
+      payments: rows.map(({ p, s }) => {
+        const st = stateOf(s);
+        return {
+          id: p.id,
+          sessionId: s.id,
+          student: who(s.studentId).name,
+          tutor: who(s.tutorId).name,
+          subject: s.subject,
+          date: s.date,
+          due: s.amount,
+          paid: st.paid,
+          balance: st.balance,
+          part: p.part,
+          planParts: s.planParts,
+          amount: p.amount,
+          reference: p.reference,
+          receiptName: p.receiptName,
+          receiptFileId: p.receiptFileId,
+          at: p.uploadedAt,
+          reviewedAt: p.reviewedAt,
+          status: p.status,
+        };
+      }),
     });
   });
 
+  /** Approves or rejects one receipt; the session's payment status follows. */
   r.post('/admin/payments/:id', (req, res) => {
+    const admin = requireUser(req, 'admin');
     const { approve } = z.object({ approve: z.boolean() }).parse(req.body);
-    const s = db.select().from(tutoringSessions).where(eq(tutoringSessions.id, req.params.id)).get();
-    if (!s || s.paymentStatus !== 'for_review') throw new HttpError(409, 'This receipt isn’t waiting for review.');
-    db.update(tutoringSessions).set({ paymentStatus: approve ? 'paid' : 'rejected', reviewedAt: nowIso() }).where(eq(tutoringSessions.id, s.id)).run();
-    logEvent(db, s.id, approve ? 'payment_approved' : 'payment_rejected', requireUser(req, 'admin').id);
-    res.json({ ok: true, tutor: nameMap(db, [s.tutorId])(s.tutorId).name });
+    const out = db.transaction((tx) => {
+      const p = tx.select().from(payments).where(eq(payments.id, req.params.id)).get();
+      if (!p || p.status !== 'for_review') throw new HttpError(409, 'This receipt isn’t waiting for review.');
+      tx.update(payments).set({ status: approve ? 'approved' : 'rejected', reviewedAt: nowIso(), reviewedBy: admin.id }).where(eq(payments.id, p.id)).run();
+      const state = syncPaymentStatus(tx, p.sessionId)!;
+      const s = tx.select().from(tutoringSessions).where(eq(tutoringSessions.id, p.sessionId)).get()!;
+      const label = s.planParts > 1 ? `Installment ${p.part} · ₱${p.amount.toLocaleString('en-US')}` : `₱${p.amount.toLocaleString('en-US')}`;
+      logEvent(tx, s.id, approve ? 'payment_approved' : 'payment_rejected', admin.id, approve && state.balance > 0 ? `${label} · ₱${state.balance.toLocaleString('en-US')} left` : label);
+      return { state, tutorId: s.tutorId };
+    }, { behavior: 'immediate' });
+    res.json({ ok: true, status: out.state.status, balance: out.state.balance, tutor: nameMap(db, [out.tutorId])(out.tutorId).name });
   });
 
   // Session log

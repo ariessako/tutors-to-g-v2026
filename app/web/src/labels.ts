@@ -6,6 +6,7 @@ export type { SessionView, ReviewView } from '../../server/views';
 export const PAYMENT: Record<PaymentStatus, { label: string; tone: Tone; icon: string }> = {
   unpaid: { label: 'Unpaid', tone: 'neutral', icon: 'circle-dashed' },
   for_review: { label: 'Receipt under review', tone: 'warn', icon: 'hourglass' },
+  partial: { label: 'Partially paid', tone: 'info', icon: 'circle-half' },
   paid: { label: 'Paid', tone: 'ok', icon: 'check-circle' },
   rejected: { label: 'Payment rejected', tone: 'bad', icon: 'x-circle' },
 };

@@ -30,6 +30,10 @@ export const SCHEDULE_HOURS = [
   '08:00', '09:00', '10:00', '11:00', '12:00', '13:00', '14:00', '15:00', '16:00', '17:00', '18:00', '19:00', '20:00',
 ] as const;
 
+/** Installment choices tutors can offer. */
+export const INSTALLMENT_PARTS = [2, 3, 4] as const;
+export const FIRST_PAYMENT_PERCENTS = [25, 30, 40, 50, 60, 75] as const;
+
 /** Active warnings that ban an account automatically. */
 export const WARNING_LIMIT = 3;
 

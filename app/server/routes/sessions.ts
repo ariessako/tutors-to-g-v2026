@@ -1,11 +1,12 @@
 import { Router } from 'express';
 import { and, eq, inArray, ne, or } from 'drizzle-orm';
 import { z } from 'zod';
-import { applications, groupInvites, groupMembers, reviews, tutoringSessions, users } from '../db/schema';
+import { applications, groupInvites, groupMembers, payments, reviews, tutoringSessions, users } from '../db/schema';
+import { amountError, paymentState, receiptsFor, syncPaymentStatus } from '../payments';
 import { HttpError, requireUser, type User } from '../auth';
 import { saveFile, type Ctx } from '../context';
 import { childIdsOf, logEvent, nowIso, uid } from '../services';
-import { reviewViews, sessionViews } from '../views';
+import { nameMap, reviewViews, sessionViews } from '../views';
 import { iso, slotDate, sortSlots } from '../../shared/format';
 import { CRITERIA, GRADES, SESSION_HOURS, SESSION_MODES, SUBJECTS, WEEK, type CriterionKey } from '../../shared/vocab';
 import type { ScoredTutor } from '../../shared/matching';
@@ -100,6 +101,22 @@ export function sessionRoutes(ctx: Ctx) {
       });
   }
 
+  /** Payments an admin confirmed in the last week, so the student knows they went through. */
+  function received(mine: (typeof tutoringSessions.$inferSelect)[]) {
+    if (!mine.length) return [];
+    const since = new Date(Date.now() - 7 * 86_400_000).toISOString();
+    const byId = new Map(mine.map((s) => [s.id, s]));
+    const tutor = nameMap(db, mine.map((s) => s.tutorId));
+    return db.select().from(payments).where(and(inArray(payments.sessionId, [...byId.keys()]), eq(payments.status, 'approved'))).all()
+      .filter((p) => (p.reviewedAt ?? '') >= since)
+      .sort((a, b) => ((a.reviewedAt ?? '') < (b.reviewedAt ?? '') ? 1 : -1))
+      .map((p) => {
+        const s = byId.get(p.sessionId)!;
+        const state = paymentState(s, receiptsFor(db, s.id));
+        return { id: p.id, amount: p.amount, part: p.part, planParts: s.planParts, reviewedAt: p.reviewedAt, subject: s.subject, date: s.date, tutor: tutor(s.tutorId).name, balance: state.balance };
+      });
+  }
+
   r.get('/student/home', (req, res) => {
     const me = requireUser(req, 'student');
     const mine = db.select().from(tutoringSessions).where(eq(tutoringSessions.studentId, me.id)).all();
@@ -121,6 +138,7 @@ export function sessionRoutes(ctx: Ctx) {
       },
       top: m ? tutorCards(m.inCluster.slice(0, 3)) : [],
       toRate: sessionViews(db, done.filter((x) => !x.rated)),
+      received: received(mine),
     });
   });
 
@@ -264,7 +282,13 @@ export function sessionRoutes(ctx: Ctx) {
       if (open.taken) throw new HttpError(409, `${t.name} is already booked then. Choose another slot.`);
       const id = uid('ses_');
       tx.insert(tutoringSessions)
-        .values({ id, studentId: me.id, tutorId: t.id, subject: d.subject, date: d.date, slot: d.slot, hours: d.hours, mode: d.mode, topic: d.topic, learner: d.learner, guardian: d.guardian, status: 'pending', amount: (t.rate ?? 0) * d.hours, createdAt: nowIso() })
+        .values({
+          id, studentId: me.id, tutorId: t.id, subject: d.subject, date: d.date, slot: d.slot, hours: d.hours, mode: d.mode, topic: d.topic, learner: d.learner, guardian: d.guardian,
+          status: 'pending', amount: (t.rate ?? 0) * d.hours, createdAt: nowIso(),
+          // The tutor's installment terms at booking time apply to this session even if they change later.
+          planParts: t.allowInstallments ? t.maxInstallments : 1,
+          planMinFirstPct: t.allowInstallments ? t.minFirstPercent : 100,
+        })
         .run();
       logEvent(tx, id, 'requested', me.id);
       return id;
@@ -354,25 +378,34 @@ export function sessionRoutes(ctx: Ctx) {
     res.json({ ok: true });
   });
 
+  /** Uploads a receipt: the full amount, or the next installment when the session's plan allows parts. */
   r.post('/sessions/:id/receipt', ctx.upload.single('receipt'), (req, res) => {
     const me = requireUser(req, 'student');
-    const s = ownSession(me, String(req.params.id), 'studentId');
-    if (!['accepted', 'completed'].includes(s.status)) throw new HttpError(409, 'You can pay once the tutor accepts.');
-    if (!['unpaid', 'rejected'].includes(s.paymentStatus)) throw new HttpError(409, 'A receipt for this session is already in.');
-    if (!req.file) throw new HttpError(400, 'Attach your receipt.');
     const body = z
       .object({
         reference: z.string().trim().max(40, 'Keep the reference number under 40 characters.').default(''),
-        amount: z.coerce.number().positive('Enter the amount you paid.'),
+        amount: z.coerce.number().positive('Enter the amount you paid.').multipleOf(0.01),
+        plan: z.enum(['full', 'installment']).default('full'),
       })
       .parse(req.body);
-    const fileId = saveFile(db, me.id, req.file);
-    db.update(tutoringSessions)
-      .set({ paymentStatus: 'for_review', paymentRef: body.reference || null, receiptFileId: fileId, receiptName: req.file.originalname, amountPaid: body.amount, receiptAt: nowIso(), reviewedAt: null })
-      .where(eq(tutoringSessions.id, s.id))
-      .run();
-    logEvent(db, s.id, 'receipt_uploaded', me.id, `₱${body.amount.toLocaleString('en-US')}`);
-    res.json({ ok: true });
+    const result = db.transaction((tx) => {
+      const s = ownSession(me, String(req.params.id), 'studentId');
+      if (!['accepted', 'completed'].includes(s.status)) throw new HttpError(409, 'You can pay once the tutor accepts.');
+      const state = paymentState(s, receiptsFor(tx, s.id));
+      if (state.status === 'for_review') throw new HttpError(409, 'A receipt for this session is already in.');
+      if (state.balance <= 0) throw new HttpError(409, 'This session is already paid.');
+      if (body.plan === 'installment' && !state.installments) throw new HttpError(400, 'This tutor doesn’t allow installments for this session. Pay in full.');
+      const err = amountError(state, body.amount, body.plan === 'full');
+      if (err) throw new HttpError(400, err);
+      if (!req.file) throw new HttpError(400, 'Attach your receipt.');
+      const fileId = saveFile(tx, me.id, req.file);
+      tx.insert(payments)
+        .values({ id: uid('pay_'), sessionId: s.id, part: state.nextPart, amount: body.amount, reference: body.reference || null, receiptFileId: fileId, receiptName: req.file.originalname, status: 'for_review', uploadedAt: nowIso() })
+        .run();
+      logEvent(tx, s.id, 'receipt_uploaded', me.id, `${state.installments ? `Installment ${state.nextPart} · ` : ''}₱${body.amount.toLocaleString('en-US')}`);
+      return syncPaymentStatus(tx, s.id);
+    }, { behavior: 'immediate' });
+    res.json({ ok: true, balance: result?.balance });
   });
 
   r.post('/reviews', (req, res) => {
