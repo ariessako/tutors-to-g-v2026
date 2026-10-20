@@ -55,6 +55,7 @@ export const profileSchema = z
     subjects: z.array(oneOf(SUBJECTS)),
     sched: z.array(oneOf(SCHED)),
     grades: z.array(oneOf(GRADES)),
+    interests: z.string().trim().max(120, 'Keep other interests under 120 characters.').optional(),
   })
   .superRefine((p, c) => {
     const err = validateProfile(p);

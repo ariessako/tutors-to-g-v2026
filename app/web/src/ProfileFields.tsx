@@ -3,13 +3,14 @@
  * named, so the surrounding <form> reads them with readProfile/readTutor.
  */
 import { useState } from 'react';
-import { CURRICULA, GRADES, HOBBIES, LEARNING, METHODS, SCHED, SUBJECTS } from '../../shared/vocab';
+import { CURRICULA, GRADES, HOBBIES, HOBBY_MAX, HOBBY_MIN, LEARNING, METHODS, SCHED, SUBJECTS } from '../../shared/vocab';
 import type { Profile, TutorDetails } from '../../shared/types';
 import { Field, Icon, Tag } from './ui';
 
 const HOBBY_ICONS: Record<string, string> = {
   Basketball: 'basketball', Volleyball: 'volleyball', 'Mobile games': 'game-controller', Drawing: 'paint-brush', Music: 'music-notes',
   'K-drama': 'television', Anime: 'star-four', Reading: 'book-open', Cooking: 'cooking-pot', Dance: 'sneaker-move', Coding: 'code', Hiking: 'mountains',
+  Football: 'soccer-ball', Swimming: 'swimming-pool', Singing: 'microphone-stage', Photography: 'camera', 'Arts & crafts': 'scissors', Chess: 'crown', Gardening: 'plant', Traveling: 'airplane-tilt',
 };
 const LEARNING_ICONS: Record<string, string> = { Visual: 'eye', Auditory: 'ear', 'Reading/Writing': 'pencil-line', Kinesthetic: 'hand-grabbing' };
 
@@ -22,6 +23,7 @@ export function readProfile(fd: FormData): Profile {
     subjects: fd.getAll('subjects').map(String),
     sched: fd.getAll('sched').map(String),
     grades: fd.getAll('grades').map(String),
+    interests: String(fd.get('interests') ?? '').trim() || undefined,
   };
 }
 
@@ -126,18 +128,21 @@ export function ProfileFields({ mode, profile, tutor, details = false }: { mode:
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
         <div className="row wrap">
           <span style={{ fontWeight: 700, fontSize: 15 }}>Hobbies</span>
-          <Tag tone={n === 3 ? 'ok' : over ? 'bad' : 'neutral'}>
-            <strong>{n} / 3</strong>
+          <Tag tone={n >= HOBBY_MIN ? 'ok' : over ? 'bad' : 'neutral'}>
+            <strong>{n} / {HOBBY_MAX}</strong>
           </Tag>
           <span className="muted" style={{ fontSize: 13 }} aria-live="polite">
-            {over ? 'Unselect one first. Three is the limit.' : 'These carry the most weight in matching.'}
+            {over ? `Unselect one first. ${HOBBY_MAX} is the limit.` : `Pick ${HOBBY_MIN} to ${HOBBY_MAX}. These carry the most weight in matching.`}
           </span>
         </div>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
           {HOBBIES.map((v) => (
-            <Chip key={v} name="hobbies" value={v} type="checkbox" icon={HOBBY_ICONS[v]} on={sel.hobbies.includes(v)} onToggle={() => toggle('hobbies', v, 3)} />
+            <Chip key={v} name="hobbies" value={v} type="checkbox" icon={HOBBY_ICONS[v]} on={sel.hobbies.includes(v)} onToggle={() => toggle('hobbies', v, HOBBY_MAX)} />
           ))}
         </div>
+        <Field label="Other interests (optional)">
+          <input className="input sm" name="interests" defaultValue={profile?.interests ?? ''} maxLength={120} placeholder="e.g. robotics, volunteering, Taylor Swift" />
+        </Field>
       </div>
 
       <Group title={isTutor ? 'How you teach best' : 'How you learn best'}>

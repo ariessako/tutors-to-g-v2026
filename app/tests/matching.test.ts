@@ -77,8 +77,10 @@ describe('cluster and matchesFor', () => {
 });
 
 describe('validateProfile', () => {
-  it('requires exactly three hobbies', () => {
-    expect(validateProfile({ ...base, hobbies: ['Music'] })).toBe('Pick exactly three hobbies.');
+  it('requires three to five hobbies', () => {
+    expect(validateProfile({ ...base, hobbies: ['Music'] })).toBe('Pick 3 to 5 hobbies.');
+    expect(validateProfile({ ...base, hobbies: ['Music', 'Chess', 'Coding', 'Anime', 'Dance', 'Hiking'] })).toBe('Pick 3 to 5 hobbies.');
+    expect(validateProfile({ ...base, hobbies: ['Music', 'Chess', 'Coding', 'Anime', 'Dance'] })).toBeNull();
     expect(validateProfile(base)).toBeNull();
   });
 });

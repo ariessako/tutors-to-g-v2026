@@ -228,7 +228,7 @@ function ApplicationPanel({ id }: { id: string }) {
     ['Curriculum', a.curricula.join(', ') || '—'],
     ['Lesson approach', a.method || '—'],
     ['Teaches best', p?.learning || '—'],
-    ['Hobbies', p?.hobbies.join(', ') || '—'],
+    ['Hobbies', [p?.hobbies.join(', '), p?.interests].filter(Boolean).join(' · ') || '—'],
     ['Rate', `${peso(a.rate)}/hr`],
   ];
   return (

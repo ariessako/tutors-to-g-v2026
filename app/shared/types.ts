@@ -19,6 +19,8 @@ export interface Profile {
   subjects: string[];
   sched: string[];
   grades: string[];
+  /** Free-text interests that aren't in the hobby list. Shown on profiles; matching doesn't use it. */
+  interests?: string;
 }
 
 export interface TutorDetails {

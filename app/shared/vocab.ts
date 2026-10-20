@@ -3,7 +3,11 @@
 export const HOBBIES = [
   'Basketball', 'Volleyball', 'Mobile games', 'Drawing', 'Music', 'K-drama',
   'Anime', 'Reading', 'Cooking', 'Dance', 'Coding', 'Hiking',
+  'Football', 'Swimming', 'Singing', 'Photography', 'Arts & crafts', 'Chess', 'Gardening', 'Traveling',
 ] as const;
+/** How many hobbies a profile picks. */
+export const HOBBY_MIN = 3;
+export const HOBBY_MAX = 5;
 export const LEARNING = ['Visual', 'Auditory', 'Reading/Writing', 'Kinesthetic'] as const;
 export const SUBJECTS = [
   'Math', 'Science', 'English', 'Filipino', 'Araling Panlipunan', 'Programming', 'Accounting',

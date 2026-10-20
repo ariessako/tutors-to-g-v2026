@@ -4,7 +4,7 @@
  * Pure functions with no I/O, so the server (live matches) and the browser
  * (K-means lab) run exactly the same computation and get the same answers.
  */
-import { GRADES, HOBBIES, LEARNING, SCHED, SUBJECTS } from './vocab';
+import { GRADES, HOBBIES, HOBBY_MAX, HOBBY_MIN, LEARNING, SCHED, SUBJECTS } from './vocab';
 import type { Profile, Settings } from './types';
 
 interface BlockDef {
@@ -26,7 +26,7 @@ export interface Block extends BlockDef {
 }
 
 const BLOCK_DEFS: BlockDef[] = [
-  { key: 'hobbies', label: 'Hobbies', opts: HOBBIES, w: 1.4, maxDiff: 6, why: 'Weighted highest. Shared interests are the signal the study links to stronger student motivation.' },
+  { key: 'hobbies', label: 'Hobbies', opts: HOBBIES, w: 1.4, maxDiff: 2 * HOBBY_MAX, why: 'Weighted highest. Shared interests are the signal the study links to stronger student motivation.' },
   { key: 'learning', label: 'Learning style', opts: LEARNING, w: 1.0, maxDiff: 2, why: 'How the student learns best vs. how the tutor teaches best.' },
   { key: 'personality', label: 'Personality', opts: ['Extroverted', 'Exploratory'], w: 1.0, maxDiff: 2, why: 'Two 0–1 scales: introvert → extrovert, structured → exploratory.' },
   { key: 'subjects', label: 'Subjects', opts: SUBJECTS, w: 0.9, maxDiff: 5, why: 'Subjects the student needs vs. subjects the tutor teaches.' },
@@ -452,7 +452,7 @@ export function matchesFor(cl: ClusterResult, studentId: string): MatchResult | 
 
 /** Returns an error message, or null when the profile is complete. */
 export function validateProfile(p: Profile): string | null {
-  if (p.hobbies.length !== 3) return 'Pick exactly three hobbies.';
+  if (p.hobbies.length < HOBBY_MIN || p.hobbies.length > HOBBY_MAX) return `Pick ${HOBBY_MIN} to ${HOBBY_MAX} hobbies.`;
   if (!p.learning) return 'Choose a learning style.';
   if (!p.subjects.length) return 'Choose at least one subject.';
   if (!p.sched.length) return 'Choose at least one schedule window.';

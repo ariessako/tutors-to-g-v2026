@@ -349,6 +349,7 @@ export function TutorProfile({ me }: { me: Me }) {
             <div className="row wrap" style={{ gap: 6 }}>
               <span className="muted" style={{ fontSize: 12, marginRight: 4 }}>Hobbies</span>
               {p.hobbies.map((h) => <Tag key={h} tone="neutral">{h}</Tag>)}
+              {p.interests && <span className="muted" style={{ fontSize: 13 }}>· Also into {p.interests}</span>}
             </div>
           </div>
           <div className="card card-pad">
