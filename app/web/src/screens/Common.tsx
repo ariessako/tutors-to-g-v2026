@@ -433,7 +433,6 @@ export function ParentProgress() {
                   <div className="row wrap" style={{ gap: 8 }}>
                     <span style={{ fontWeight: 600, fontSize: 13 }}>{f.tutor}</span>
                     <span style={{ color: 'var(--cl-6)', fontSize: 12 }}>{stars(f.rating)}</span>
-                    {f.anonymous && <Tag tone="neutral" size="sm">Anonymous</Tag>}
                   </div>
                   <p style={{ fontSize: 13 }}>{f.comment}</p>
                   <span className="muted" style={{ fontSize: 11 }}>{fmtDate(f.date)}</span>

@@ -411,7 +411,7 @@ export function TutorReviews() {
   const { stats, reviews } = q.data;
   return (
     <section className="page" style={{ maxWidth: 960 }}>
-      <PageHead title="Reviews" sub="Anonymous reviews hide the author’s name. Admins check low ratings." />
+      <PageHead title="Reviews" sub="All reviews are anonymous: you see the comment, not who wrote it. Admins check low ratings." />
       <div className="card row wrap" style={{ padding: 20, gap: 32 }}>
         <div className="row" style={{ alignItems: 'baseline' }}>
           <span className="head-font" style={{ fontSize: 52, fontWeight: 700, lineHeight: 1 }}>{stats.count ? stats.avg.toFixed(1) : '—'}</span>

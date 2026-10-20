@@ -61,6 +61,9 @@ describe('access control', () => {
   it('hides anonymous review authors from everyone but admins', async () => {
     const bea = await as('bea@student.ph');
     const pub = await bea.get('/api/tutors/t_paolo');
+    // Every review is anonymous to non-admins.
+    expect(pub.body.reviews.length).toBeGreaterThan(0);
+    for (const r of pub.body.reviews) expect([r.author, r.authorId]).toEqual([null, null]);
     const anon = pub.body.reviews.find((r: { anonymous: boolean }) => r.anonymous);
     expect(anon.authorId).toBeNull();
     expect(anon.author).toBeNull();

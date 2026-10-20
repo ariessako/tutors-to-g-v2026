@@ -687,7 +687,6 @@ type AdminReview = ReviewView & { attention: boolean };
 const FB_FILTERS = [
   { value: 'attention', label: 'Needs attention', match: (r: AdminReview) => r.attention },
   { value: 'all', label: 'All', match: () => true },
-  { value: 'anon', label: 'Anonymous', match: (r: AdminReview) => r.anonymous },
   { value: 'hidden', label: 'Hidden', match: (r: AdminReview) => r.hidden },
 ] as const;
 
@@ -706,7 +705,7 @@ export function AdminFeedback() {
   };
   return (
     <section className="page" style={{ gap: 18 }}>
-      <PageHead title="Feedback" sub="Anonymous reviews hide the author from tutors and students. You can still see who wrote them." />
+      <PageHead title="Feedback" sub="All reviews are anonymous to tutors, students and parents. You can still see who wrote them." />
       <Seg label="Filter reviews" value={filter} onChange={setFilter} options={FB_FILTERS.map((x) => ({ value: x.value, label: `${x.label} · ${all.filter(x.match).length}` }))} />
       <ErrorBox error={error} />
       <div className="card card-clip">
@@ -721,7 +720,6 @@ export function AdminFeedback() {
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: 0 }}>
                     <div className="row wrap" style={{ gap: 8, fontSize: 13 }}>
                       <span style={{ fontWeight: 700 }}>{r.author}{r.authorRole === 'parent' ? ' (parent)' : ''}</span>
-                      {r.anonymous && <Tag tone="neutral" size="sm" icon="eye-slash">Posted anonymously</Tag>}
                       <span className="muted">on</span>
                       <span style={{ fontWeight: 600 }}>{r.tutor}</span>
                       <span style={{ color: 'var(--cl-6)' }}>{stars(r.rating)}</span>

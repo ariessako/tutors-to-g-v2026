@@ -178,7 +178,6 @@ const RATING_LABELS = ['', 'Poor', 'Fair', 'Good', 'Very good', 'Excellent'];
 
 export function RateModal({ tutorId, tutorName, sessionId, onClose }: { tutorId: string; tutorName: string; sessionId?: string; onClose: () => void }) {
   const [stars, setStars] = useState(0);
-  const [anon, setAnon] = useState(false);
   const { run, error, setError, busy } = useAction();
   const toast = useToast();
 
@@ -187,9 +186,9 @@ export function RateModal({ tutorId, tutorName, sessionId, onClose }: { tutorId:
     const comment = String(new FormData(e.currentTarget).get('comment') ?? '').trim();
     if (!stars) return setError('Choose a star rating.');
     if (comment.length < 4) return setError('Add a short comment.');
-    if (!(await run(() => api('/reviews', { body: { tutorId, rating: stars, comment, anonymous: anon, sessionId } })))) return;
+    if (!(await run(() => api('/reviews', { body: { tutorId, rating: stars, comment, sessionId } })))) return;
     onClose();
-    toast(`Thanks. Your ${anon ? 'anonymous ' : ''}review is on ${tutorName.split(' ')[0]}’s profile.`);
+    toast(`Thanks. Your anonymous review is on ${tutorName.split(' ')[0]}’s profile.`);
   }
 
   return (
@@ -216,13 +215,9 @@ export function RateModal({ tutorId, tutorName, sessionId, onClose }: { tutorId:
         <Field label="Comment">
           <textarea className="input" name="comment" placeholder="What worked, and what could be better?" />
         </Field>
-        <label style={{ display: 'flex', gap: 10, alignItems: 'flex-start', cursor: 'pointer' }}>
-          <input type="checkbox" checked={anon} onChange={() => setAnon(!anon)} style={{ accentColor: 'var(--color-accent)', marginTop: 4 }} />
-          <span style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-            <span>Post anonymously</span>
-            <span className="muted" style={{ fontSize: 13 }}>Your name is hidden from the tutor and other students. Admins can still see it.</span>
-          </span>
-        </label>
+        <p className="muted row" style={{ fontSize: 13, gap: 8 }}>
+          <Icon name="eye-slash" />All reviews are anonymous. Your comment is shown, but your name is hidden from the tutor and other users. Admins can still see it.
+        </p>
         <ErrorBox error={error} />
         <div className="dialog-actions">
           <button type="button" className="btn btn-secondary" onClick={onClose}>Cancel</button>

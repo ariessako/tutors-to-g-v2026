@@ -305,8 +305,9 @@ export async function seedDemo(db: Db, uploadsDir: string, today = new Date()) {
   // Reviews
   const revRows: (typeof t.reviews.$inferInsert)[] = [];
   let rid = 0;
-  const rv = (tutorId: string, authorId: string, rating: number, comment: string, anonymous: boolean, days: number, extra: Partial<typeof t.reviews.$inferInsert> = {}) =>
-    revRows.push({ id: `r${++rid}`, tutorId, authorId, authorRole: 'student', rating, comment, anonymous, date: dayAgo(days), status: rating <= 2 ? 'new' : 'reviewed', hidden: false, note: '', ...extra });
+  // Every review is anonymous. `_wasAnon` is kept so the random sequence (and the rest of the dataset) stays the same.
+  const rv = (tutorId: string, authorId: string, rating: number, comment: string, _wasAnon: boolean, days: number, extra: Partial<typeof t.reviews.$inferInsert> = {}) =>
+    revRows.push({ id: `r${++rid}`, tutorId, authorId, authorRole: 'student', rating, comment, anonymous: true, date: dayAgo(days), status: rating <= 2 ? 'new' : 'reviewed', hidden: false, note: '', ...extra });
   rv('t_paolo', 's3', 5, 'We talk about basketball for five minutes before every session, so I actually look forward to Math now.', false, 4);
   rv('t_paolo', 's11', 5, "The 4A's format makes every lesson easy to follow. Very patient.", true, 11);
   rv('t_paolo', 'p_liza', 5, 'Kind and approachable. Bea opened up quickly and her Math grade went up this quarter.', false, 16, { authorRole: 'parent' });

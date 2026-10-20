@@ -81,13 +81,14 @@ export function sessionViews(db: Db, rows: SessionRow[]) {
 export type SessionView = ReturnType<typeof sessionViews>[number];
 
 /**
- * Reviews as other users see them. The author of an anonymous review is
- * withheld unless `revealAuthors` (admins only).
+ * Reviews as other users see them. Every review is anonymous: the comment is
+ * shown but the author is withheld unless `revealAuthors` (admins, or the
+ * author reading their own reviews).
  */
 export function reviewViews(db: Db, rows: ReviewRow[], revealAuthors = false) {
   const who = nameMap(db, rows.flatMap((r) => [r.authorId, r.tutorId]));
   return rows.map((r) => {
-    const hide = r.anonymous && !revealAuthors;
+    const hide = !revealAuthors;
     const author = hide ? null : who(r.authorId).name;
     return {
       id: r.id,

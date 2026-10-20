@@ -312,7 +312,6 @@ export function sessionRoutes(ctx: Ctx) {
         tutorId: z.string(),
         rating: z.number().int().min(1, 'Choose a star rating.').max(5),
         comment: z.string().trim().min(4, 'Add a short comment.').max(2000),
-        anonymous: z.boolean(),
         sessionId: z.string().optional(),
       })
       .parse(req.body);
@@ -339,7 +338,7 @@ export function sessionRoutes(ctx: Ctx) {
       )).get();
       if (previous) throw new HttpError(409, me.role === 'parent' ? 'You already reviewed this tutor.' : 'You already rated this session.');
       tx.insert(reviews)
-        .values({ id: uid('r_'), tutorId: d.tutorId, authorId: me.id, authorRole: me.role as 'student' | 'parent', rating: d.rating, comment: d.comment, anonymous: d.anonymous, date: iso(new Date()), status: 'new', sessionId: session?.id ?? null })
+        .values({ id: uid('r_'), tutorId: d.tutorId, authorId: me.id, authorRole: me.role as 'student' | 'parent', rating: d.rating, comment: d.comment, anonymous: true, date: iso(new Date()), status: 'new', sessionId: session?.id ?? null })
         .run();
       if (session && me.role === 'student') tx.update(tutoringSessions).set({ rated: d.rating }).where(eq(tutoringSessions.id, session.id)).run();
     }, { behavior: 'immediate' });
