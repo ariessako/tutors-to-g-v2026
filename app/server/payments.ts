@@ -63,7 +63,9 @@ export function paymentState(s: Pick<Session, 'amount' | 'date' | 'status' | 'pl
           ? pending ? 'in_review' : p.dueDate < today ? 'overdue' : 'due'
           : 'upcoming') as ScheduleStatus,
   }));
-  const next = schedule.find((p) => p.part === nextPart && balance > 0) ?? null;
+  // Only accepted or completed sessions owe anything; a request or a declined session has nothing due.
+  const owed = s.status === 'accepted' || s.status === 'completed';
+  const next = owed ? (schedule.find((p) => p.part === nextPart && balance > 0) ?? null) : null;
   return {
     status,
     paid,

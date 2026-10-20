@@ -299,7 +299,7 @@ export async function seedDemo(db: Db, uploadsDir: string, today = new Date()) {
       const [h, m] = row.slot.split(' ')[1].split(':').map(Number);
       const end = new Date(`${row.date}T00:00:00`);
       end.setHours(h, m + row.hours * 60, 0, 0);
-      Object.assign(row, { attendance: 'present', actualHours: row.hours, topicsCovered: row.topicsCovered ?? row.topic, sessionNotes: row.sessionNotes ?? '', completedAt: end.toISOString() });
+      Object.assign(row, { attendance: row.attendance ?? 'present', actualHours: row.actualHours ?? row.hours, topicsCovered: row.topicsCovered ?? row.topic, sessionNotes: row.sessionNotes ?? '', completedAt: end.toISOString() });
     }
     sessRows.push(row);
     return row;
@@ -327,17 +327,60 @@ export async function seedDemo(db: Db, uploadsDir: string, today = new Date()) {
     }
   }
 
+  // Showcase data for the panel revisions. Added after the random draws (none
+  // of it calls r()), so the rest of the dataset stays exactly the same.
+  // A broad tutor outside Bea's cluster who still teaches everything she needs
+  // shows up under "Covers your needs" on her Matches page.
+  userRows.push({
+    ...base('t_penn', 'teacher', 'Penn Penetrante', 'penn.penetrante@tutor.ph', 40),
+    profile: { hobbies: ['Chess', 'Reading', 'Gardening', 'Cooking', 'K-drama'], learning: 'Auditory', social: 0.2, approach: 0.15, subjects: ['Math', 'Science', 'English', 'Programming'], sched: ['Weekday evenings', 'Weekends'], grades: ['Junior High', 'Senior High', 'College'], interests: 'Astronomy, quiz bees' },
+    licenseType: 'licensed', rate: 550, years: 8, education: 'MAEd Mathematics · Philippine Normal University', curricula: ['MATATAG Curriculum', 'K–12 Basic Education'], method: 'Direct instruction',
+    headline: 'Math, Science, English and Programming from Junior High to College',
+    bio: 'Licensed teacher with eight years in a Quezon City science high school. Structured lessons with worked examples and short quizzes. Weekends are for chess club and the garden.',
+    slots: ['Mon 18:00', 'Tue 18:00', 'Wed 18:00', 'Thu 18:00', 'Sat 13:00', 'Sat 14:00', 'Sun 14:00'],
+    termsVersion: TERMS_VERSION, termsAcceptedAt: stampAgo(40, 9),
+  });
+  appRows.push({ userId: 't_penn', status: 'approved', submittedAt: dayAgo(38), note: '', video: addDocs('t_penn', 'Penn Penetrante', 38) });
+  histRows.push({ userId: 't_penn', status: 'pending', at: stampAgo(38, 10) }, { userId: 't_penn', status: 'approved', at: stampAgo(36, 15), note: 'Documents verified.' });
+  // Bea's other interests (free text, not used by matching).
+  byId('s_bea').profile = { ...byId('s_bea').profile!, interests: 'School robotics club, volleyball varsity' };
+
+  // Bea: a Science session paid in installments, part 1 received two days ago, part 2 overdue.
+  const beaPlan = ses({ studentId: 's_bea', tutorId: 't_paolo', subject: 'Science', date: dayAgo(16), slot: 'Thu 17:00', hours: 1, mode: 'Online (Google Meet)', topic: 'Cell division: mitosis and meiosis', learner: 'Bea Santos, Grade 10', status: 'completed', amount: 450, paymentStatus: 'partial', planParts: 3, planMinFirstPct: 40, planIntervalDays: 7, createdAt: stampAgo(20, 18), attendance: 'late', topicsCovered: 'Mitosis phases; started meiosis', sessionNotes: 'Started 10 minutes late (Bea had a club meeting). Finish the meiosis diagram before next session.' });
+  // Bea: a request auto-declined because Paolo accepted another session at that time.
+  ses({ studentId: 's_bea', tutorId: 't_paolo', subject: 'Math', date: upcoming('Mon 17:00'), slot: 'Mon 17:00', hours: 1, mode: 'Online (Google Meet)', topic: 'Trigonometric ratios', learner: 'Bea Santos, Grade 10', status: 'declined', declineReason: 'The tutor is already booked at this time.', amount: 450, createdAt: stampAgo(3, 20) });
+  // Another student's installment waiting for admin review (Payments queue).
+  const s20Plan = ses({ studentId: 's20', tutorId: 't_paolo', subject: 'Math', date: dayAgo(5), slot: 'Sat 09:00', hours: 1, mode: 'In-person', topic: 'Probability basics', learner: byId('s20').name, status: 'completed', amount: 450, paymentStatus: 'for_review', planParts: 3, planMinFirstPct: 40, planIntervalDays: 7, createdAt: stampAgo(9, 12) });
+  // A no-show, logged by the tutor (Sessions log).
+  ses({ studentId: 's3', tutorId: 't_paolo', subject: 'Math', date: dayAgo(3), slot: 'Sat 11:00', hours: 1, mode: 'Online (Google Meet)', topic: 'Linear inequalities', learner: learner('s3'), status: 'completed', amount: 450, createdAt: stampAgo(8, 15), attendance: 'no_show', actualHours: 0, topicsCovered: '', sessionNotes: 'Waited 20 minutes on Meet and messaged the student; no reply.' });
+  // A banned student: three active warnings.
+  byId('s14').status = 'banned';
+
   // Session timelines, rebuilt from each session's own fields.
   const eventRows: (typeof t.sessionEvents.$inferInsert)[] = [];
   const later = (stamp: string, minutes: number) => new Date(new Date(stamp).getTime() + minutes * 60_000).toISOString();
   for (const x of sessRows) {
     const ev = (at: string, kind: (typeof eventRows)[number]['kind'], actorId: string | null, detail = '') => eventRows.push({ sessionId: x.id, at, kind, actorId, detail });
     ev(x.createdAt, 'requested', x.studentId);
-    if (x.status !== 'pending') ev(later(x.createdAt, 90), x.status === 'declined' ? 'declined' : 'accepted', x.tutorId);
+    if (x.status === 'declined' && x.declineReason) ev(later(x.createdAt, 90), 'auto_declined', null, 'The tutor accepted another session at this time.');
+    else if (x.status !== 'pending') ev(later(x.createdAt, 90), x.status === 'declined' ? 'declined' : 'accepted', x.tutorId);
     if (x.receiptAt) ev(x.receiptAt, 'receipt_uploaded', x.studentId, `₱${(x.amountPaid ?? x.amount).toLocaleString('en-US')}`);
     if (x.reviewedAt) ev(x.reviewedAt, x.paymentStatus === 'rejected' ? 'payment_rejected' : 'payment_approved', 'admin');
-    if (x.completedAt) ev(x.completedAt, 'completed', x.tutorId, 'Student attended');
+    if (x.completedAt) ev(x.completedAt, 'completed', x.tutorId, { present: 'Student attended', late: 'Student was late', no_show: 'Student did not attend' }[x.attendance ?? 'present']);
   }
+
+  /** A receipt for one installment of a seeded session, with its mock PDF and timeline entries. */
+  const installment = (x: typeof beaPlan, part: number, amount: number, status: 'approved' | 'for_review', uploadedAt: string, reviewedAt: string | null = null) => {
+    const name = `installment-${part}-${x.id}.pdf`;
+    const fileId = mockFile(x.studentId, name, uploadedAt, 'Payment receipt', [`Paid by: ${byId(x.studentId).name}`, 'Paid to: Tutors To Go', `Amount: PHP ${amount.toLocaleString('en-US')}`, `Installment ${part} of up to ${x.planParts}`, `Date: ${uploadedAt.slice(0, 10)}`]);
+    paymentRows.push({ id: `pay_${x.id}_${part}`, sessionId: x.id, part, amount, reference: `GC${x.id.slice(3)}${part}0042`, receiptFileId: fileId, receiptName: name, status, uploadedAt, reviewedAt, reviewedBy: reviewedAt ? 'admin' : null });
+    eventRows.push({ sessionId: x.id, at: uploadedAt, kind: 'receipt_uploaded', actorId: x.studentId, detail: `Installment ${part} · ₱${amount.toLocaleString('en-US')}` });
+    if (reviewedAt) eventRows.push({ sessionId: x.id, at: reviewedAt, kind: 'payment_approved', actorId: 'admin', detail: `Installment ${part} · ₱${amount.toLocaleString('en-US')} · ₱${(x.amount - amount).toLocaleString('en-US')} left` });
+  };
+  installment(beaPlan, 1, 200, 'approved', stampAgo(3, 19), stampAgo(2, 9));
+  installment(s20Plan, 1, 200, 'approved', stampAgo(5, 8), stampAgo(4, 10));
+  installment(s20Plan, 2, 150, 'for_review', stampAgo(0, 7, 30));
+
 
   // Reviews
   const revRows: (typeof t.reviews.$inferInsert)[] = [];
@@ -410,6 +453,10 @@ export async function seedDemo(db: Db, uploadsDir: string, today = new Date()) {
     { id: 'w1', userId: 't_paolo', issuedBy: 'admin', reason: 'Started a session 15 minutes late without telling the student.', at: stampAgo(9, 10) },
     { id: 'w2', userId: Tt[12].id, issuedBy: 'admin', reason: 'Asked a student to pay outside the platform.', at: stampAgo(3, 14) },
     { id: 'w3', userId: Tt[12].id, issuedBy: 'admin', reason: 'Missed a confirmed session.', at: stampAgo(20, 9), removedAt: stampAgo(18, 9), removedBy: 'admin' },
+    // s14 reached the limit and is banned.
+    { id: 'w4', userId: 's14', issuedBy: 'admin', reason: 'Posted insulting comments in a study group.', at: stampAgo(25, 10) },
+    { id: 'w5', userId: 's14', issuedBy: 'admin', reason: 'Shared a classmate’s phone number in a group thread.', at: stampAgo(12, 16) },
+    { id: 'w6', userId: 's14', issuedBy: 'admin', reason: 'Uploaded someone else’s payment receipt.', at: stampAgo(4, 11) },
   ];
 
   const oldFiles = db.select({ storedName: t.files.storedName }).from(t.files).all();
