@@ -2,6 +2,7 @@ import { useState, type FormEvent } from 'react';
 import type { Me, Role } from '../../../shared/types';
 import { validateProfile } from '../../../shared/matching';
 import { nextDate } from '../../../shared/format';
+import { TermsModal } from './Terms';
 import { api, useAction, useApi } from '../api';
 import { ProfileFields, readProfile, readTutor } from '../ProfileFields';
 import { homePath } from '../Shell';
@@ -177,6 +178,7 @@ const ROLES: { value: SignupRole; label: string; icon: string }[] = [
 function Signup() {
   const [role, setRole] = useState<SignupRole>('student');
   const [step, setStep] = useState<1 | 2>(1);
+  const [showTerms, setShowTerms] = useState(false);
   const [data, setData] = useState<Step1>({ name: '', email: '', password: '', gradeLabel: '', school: '', childEmail: '' });
   const { run, error, setError, busy } = useAction();
 
@@ -225,6 +227,8 @@ function Signup() {
     const profile = readProfile(fd);
     const err = validateProfile(profile);
     if (err) return setError(err);
+    const acceptTerms = fd.get('acceptTerms') === 'on';
+    if (role === 'teacher' && !acceptTerms) return setError('Accept the Terms and Conditions to register as a tutor.');
     void create({
       role,
       name: data.name,
@@ -234,6 +238,7 @@ function Signup() {
       school: data.school,
       profile,
       tutor: role === 'teacher' ? readTutor(fd) : undefined,
+      acceptTerms: role === 'teacher' ? acceptTerms : undefined,
     });
   }
 
@@ -250,6 +255,17 @@ function Signup() {
           </p>
         </div>
         <ProfileFields mode={role === 'teacher' ? 'tutor' : 'student'} details={role === 'teacher'} />
+        {role === 'teacher' && (
+          <label style={{ display: 'flex', gap: 10, alignItems: 'flex-start', cursor: 'pointer', fontSize: 14 }}>
+            <input type="checkbox" name="acceptTerms" style={{ accentColor: 'var(--color-accent)', marginTop: 4 }} />
+            <span>
+              I have read and agree to the{' '}
+              <button type="button" className="link" style={{ background: 'none', border: 0, padding: 0, cursor: 'pointer', font: 'inherit', color: 'var(--color-accent-700)' }} onClick={() => setShowTerms(true)}>Terms and Conditions</button>
+              , including the tutor obligations, rate tiers and the warning policy.
+            </span>
+          </label>
+        )}
+        {showTerms && <TermsModal onClose={() => setShowTerms(false)} />}
         <ErrorBox error={error} />
         <div style={{ display: 'flex', gap: 8 }}>
           <button type="button" className="btn btn-secondary btn-lg" onClick={() => { setStep(1); setError(null); }}>Back</button>
@@ -304,6 +320,9 @@ function Signup() {
       )}
       <ErrorBox error={error} />
       <button type="submit" className="btn btn-primary btn-lg" disabled={busy}>{role === 'parent' ? 'Create account' : 'Continue'}</button>
+      <p className="muted" style={{ fontSize: 12, textAlign: 'center' }}>
+        By creating an account you agree to the <a href="/terms" target="_blank" rel="noopener noreferrer" className="link">Terms and Conditions</a>.
+      </p>
     </form>
   );
 }

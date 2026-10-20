@@ -10,6 +10,7 @@ import type { Db } from './db';
 import * as t from './db/schema';
 import { hashPassword } from './auth';
 import { DEFAULT_SETTINGS } from './services';
+import { TERMS_VERSION } from '../shared/terms';
 import { mockPdf } from './mockPdf';
 import { rng } from '../shared/matching';
 import { addDays, iso, nextDate } from '../shared/format';
@@ -178,6 +179,7 @@ export async function seedDemo(db: Db, uploadsDir: string, today = new Date()) {
     if (!curricula.includes(c2)) curricula.push(c2);
     const row: UserRow = {
       ...base(id, 'teacher', nm, email ?? `${s}@tutor.ph`, 60 + Math.floor(r() * 150)),
+      termsVersion: TERMS_VERSION,
       profile,
       rate: 250 + 50 * Math.floor(r() * 8),
       years,
@@ -189,6 +191,7 @@ export async function seedDemo(db: Db, uploadsDir: string, today = new Date()) {
       slots: slotsFor(profile.sched),
       ...extra,
     };
+    row.termsAcceptedAt = new Date(`${row.joined}T09:00:00`).toISOString();
     userRows.push(row);
     return row;
   }

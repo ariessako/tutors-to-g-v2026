@@ -4,6 +4,7 @@ import type { Me, Role } from '../../shared/types';
 import { useMe } from './api';
 import { homePath, Shell } from './Shell';
 import { Landing } from './screens/Landing';
+import { TermsPage } from './screens/Terms';
 import { Matches, StudentHome, StudentSessions, TutorProfile } from './screens/Student';
 import { Group, Groups, ParentChildren, ParentProgress, Profile } from './screens/Common';
 import { TutorHome, TutorReviews, TutorSchedule, TutorSessions } from './screens/Tutor';
@@ -50,6 +51,7 @@ const page = (roles: Role[] | undefined, render: (me: Me) => ReactNode, approved
 
 const router = createBrowserRouter([
   { path: '/', element: <Root /> },
+  { path: '/terms', element: <TermsPage /> },
   {
     element: <Layout />,
     children: [

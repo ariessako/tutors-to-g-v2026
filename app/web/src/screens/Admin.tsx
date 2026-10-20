@@ -130,6 +130,8 @@ interface AppDetail {
   curricula: string[];
   method: string;
   rate: number;
+  termsVersion: string | null;
+  termsAcceptedAt: string | null;
   status: AppStatus;
   note: string;
   video: string;
@@ -230,6 +232,7 @@ function ApplicationPanel({ id }: { id: string }) {
     ['Teaches best', p?.learning || '—'],
     ['Hobbies', [p?.hobbies.join(', '), p?.interests].filter(Boolean).join(' · ') || '—'],
     ['Rate', `${peso(a.rate)}/hr`],
+    ['Terms', a.termsVersion ? `Accepted version ${a.termsVersion}${a.termsAcceptedAt ? ` on ${fmtStamp(a.termsAcceptedAt)}` : ''}` : 'Not accepted'],
   ];
   return (
     <div className="card sticky-md-off" style={{ boxShadow: 'var(--shadow-md)', display: 'flex', flexDirection: 'column', position: 'sticky', top: 84 }}>

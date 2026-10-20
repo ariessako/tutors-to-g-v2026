@@ -7,8 +7,9 @@ import { emailSchema, profileSchema, tutorDetailsSchema, type Ctx } from '../con
 import { meDto } from '../views';
 import { DEMO_ACCOUNTS, DEMO_PASSWORD, seedDemo } from '../seed';
 import { iso } from '../../shared/format';
-import { uid } from '../services';
+import { nowIso, uid } from '../services';
 import { requestLink } from './links';
+import { TERMS_VERSION } from '../../shared/terms';
 
 const signupSchema = z.object({
   role: z.enum(['student', 'teacher', 'parent']),
@@ -20,6 +21,7 @@ const signupSchema = z.object({
   childEmail: z.string().trim().toLowerCase().max(200).optional(),
   profile: profileSchema.optional(),
   tutor: tutorDetailsSchema.partial().optional(),
+  acceptTerms: z.boolean().optional(),
 });
 
 export function authRoutes(ctx: Ctx) {
@@ -49,11 +51,13 @@ export function authRoutes(ctx: Ctx) {
     const d = signupSchema.parse(req.body);
     if (byEmail(d.email)) throw new HttpError(409, 'An account with this email already exists.');
     if (d.role !== 'parent' && !d.profile) throw new HttpError(400, 'Complete your matching profile.');
+    if (d.role === 'teacher' && !d.acceptTerms) throw new HttpError(400, 'Accept the Terms and Conditions to register as a tutor.');
     const id = uid(d.role[0] + '_');
     const passwordHash = await hashPassword(d.password);
     let requested = false;
     db.transaction((tx) => {
-      const base = { id, role: d.role, name: d.name, email: d.email, passwordHash, status: 'active' as const, joined: iso(new Date()) };
+      const terms = d.acceptTerms ? { termsVersion: TERMS_VERSION, termsAcceptedAt: nowIso() } : {};
+      const base = { id, role: d.role, name: d.name, email: d.email, passwordHash, status: 'active' as const, joined: iso(new Date()), ...terms };
       if (d.role === 'student') {
         tx.insert(users).values({ ...base, profile: d.profile, gradeLabel: d.gradeLabel ?? '', school: d.school ?? '' }).run();
       } else if (d.role === 'teacher') {

@@ -6,6 +6,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { openDb } from '../server/db';
 import { createApp } from '../server/app';
 import { seedDemo } from '../server/seed';
+import { TERMS_VERSION } from '../shared/terms';
 
 let app: ReturnType<typeof createApp>['app'];
 let uploads: string;
@@ -43,6 +44,23 @@ describe('auth', () => {
     expect(r.body.cluster.no).toBeGreaterThan(0);
     const m = await agent.get('/api/matches');
     expect(m.body.matches.inCluster.length).toBeGreaterThan(0);
+  });
+
+  it('makes tutors accept the terms and records the version', async () => {
+    const body = {
+      role: 'teacher', name: 'Terms Tutor', email: 'terms.tutor@example.com', password: 'secret1',
+      profile: { hobbies: ['Coding', 'Anime', 'Music'], learning: 'Visual', social: 0.3, approach: 0.8, subjects: ['Programming'], sched: ['Weekday evenings'], grades: ['Senior High'] },
+    };
+    const refused = await request(app).post('/api/auth/signup').send(body);
+    expect(refused.status).toBe(400);
+    expect(refused.body.error).toMatch(/Terms and Conditions/);
+    const agent = request.agent(app);
+    const ok = await agent.post('/api/auth/signup').send({ ...body, acceptTerms: true });
+    expect(ok.status).toBe(201);
+    const admin = await as('admin@tutorstogo.ph');
+    const detail = (await admin.get(`/api/admin/applications/${ok.body.me.id}`)).body.application;
+    expect(detail.termsVersion).toBe(TERMS_VERSION);
+    expect(detail.termsAcceptedAt).toBeTruthy();
   });
 
   it('refuses a duplicate email', async () => {

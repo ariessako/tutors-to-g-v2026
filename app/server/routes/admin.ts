@@ -82,6 +82,8 @@ export function adminRoutes(ctx: Ctx) {
         curricula: u.curricula ?? [],
         method: u.method ?? '',
         rate: u.rate ?? 0,
+        termsVersion: u.termsVersion,
+        termsAcceptedAt: u.termsAcceptedAt,
         status: a.status,
         note: a.note,
         video: a.video ?? '',

@@ -18,6 +18,9 @@ export const users = sqliteTable('users', {
   passwordHash: text('password_hash').notNull(),
   status: text('status').$type<UserStatus>().notNull().default('active'),
   joined: text('joined').notNull(),
+  /** Terms and Conditions version the user accepted, and when. Required for tutors. */
+  termsVersion: text('terms_version'),
+  termsAcceptedAt: text('terms_accepted_at'),
   // Students
   gradeLabel: text('grade_label'),
   school: text('school'),
