@@ -87,18 +87,19 @@ export function sessionRoutes(ctx: Ctx) {
   /**
    * The tutor's open hours over the next seven days, soonest first. A slot is
    * `taken` when a session of `hours` there would overlap one the tutor has
-   * already confirmed.
+   * already confirmed, and `busy` when it would overlap one the student has.
    */
-  function scheduledSlots(t: User, hours = 1) {
-    const booked = db.select().from(tutoringSessions)
-      .where(and(eq(tutoringSessions.tutorId, t.id), inArray(tutoringSessions.status, ['accepted', 'completed'])))
-      .all();
+  function scheduledSlots(t: User, hours = 1, studentId?: string) {
+    const confirmed = inArray(tutoringSessions.status, ['accepted', 'completed']);
+    const booked = db.select().from(tutoringSessions).where(and(eq(tutoringSessions.tutorId, t.id), confirmed)).all();
+    const mine = studentId ? db.select().from(tutoringSessions).where(and(eq(tutoringSessions.studentId, studentId), confirmed)).all() : [];
     return (t.slots ?? [])
       .map((slot) => ({ at: slotDate(slot), slot }))
       .sort((a, b) => a.at.getTime() - b.at.getTime())
       .map(({ at, slot }) => {
         const date = iso(at);
-        return { date, slot, taken: booked.some((s) => overlaps({ tutorId: t.id, studentId: '', date, slot, hours }, s)) };
+        const here = { tutorId: t.id, studentId: studentId ?? '', date, slot, hours };
+        return { date, slot, taken: booked.some((s) => overlaps(here, s)), busy: mine.some((s) => overlaps(here, s)) };
       });
   }
 
@@ -255,7 +256,7 @@ export function sessionRoutes(ctx: Ctx) {
     res.json({
       tutor: { id: t.id, name: t.name, rate: t.rate ?? 0 },
       subjects,
-      slots: scheduledSlots(t, hours),
+      slots: scheduledSlots(t, hours, me.id),
       learner: me.name + (me.gradeLabel ? `, ${me.gradeLabel}` : ''),
     });
   });
@@ -280,9 +281,10 @@ export function sessionRoutes(ctx: Ctx) {
       const t = approvedTutor(d.tutorId);
       if (!t) throw new HttpError(404, 'This tutor isn’t available.');
       if (!t.profile!.subjects.includes(d.subject)) throw new HttpError(400, `${t.name} doesn’t teach ${d.subject}.`);
-      const open = scheduledSlots(t, d.hours).find((o) => o.date === d.date && o.slot === d.slot);
+      const open = scheduledSlots(t, d.hours, me.id).find((o) => o.date === d.date && o.slot === d.slot);
       if (!open) throw new HttpError(409, 'That slot is no longer on the tutor’s schedule. Choose another one.');
       if (open.taken) throw new HttpError(409, `${t.name} is already booked then. Choose another slot.`);
+      if (open.busy) throw new HttpError(409, 'You already have a session at that time. Choose another slot.');
       const id = uid('ses_');
       tx.insert(tutoringSessions)
         .values({
@@ -333,20 +335,22 @@ export function sessionRoutes(ctx: Ctx) {
       tx.update(tutoringSessions).set({ status: accept ? 'accepted' : 'declined' }).where(eq(tutoringSessions.id, s.id)).run();
       logEvent(tx, s.id, accept ? 'accepted' : 'declined', me.id);
       if (!accept) return 0;
-      // A tutor teaches one class at a time, so other requests for the same time are declined.
-      const clashing = tx.select().from(tutoringSessions)
-        .where(and(eq(tutoringSessions.tutorId, s.tutorId), eq(tutoringSessions.status, 'pending'), ne(tutoringSessions.id, s.id)))
+      // A tutor teaches one class at a time and a student attends one at a time, so
+      // other pending requests that overlap this one are declined: the tutor's
+      // (from other students) and the student's (with other tutors).
+      const others = tx.select().from(tutoringSessions)
+        .where(and(or(eq(tutoringSessions.tutorId, s.tutorId), eq(tutoringSessions.studentId, s.studentId)), eq(tutoringSessions.status, 'pending'), ne(tutoringSessions.id, s.id)))
         .all()
-        .filter((p) => overlaps(s, p))
-        .map((p) => p.id);
-      if (clashing.length) {
+        .filter((p) => overlaps(s, p));
+      for (const p of others) {
+        const tutorBusy = p.tutorId === s.tutorId;
         tx.update(tutoringSessions)
-          .set({ status: 'declined', declineReason: 'The tutor is already booked at this time.' })
-          .where(inArray(tutoringSessions.id, clashing))
+          .set({ status: 'declined', declineReason: tutorBusy ? 'The tutor is already booked at this time.' : 'You already have a session at this time.' })
+          .where(eq(tutoringSessions.id, p.id))
           .run();
-        for (const id of clashing) logEvent(tx, id, 'auto_declined', null, 'The tutor accepted another session at this time.');
+        logEvent(tx, p.id, 'auto_declined', null, tutorBusy ? 'The tutor accepted another session at this time.' : 'The student has another session at this time.');
       }
-      return clashing.length;
+      return others.length;
     }, { behavior: 'immediate' });
     res.json({ ok: true, autoDeclined });
   });

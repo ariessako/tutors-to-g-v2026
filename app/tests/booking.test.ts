@@ -105,12 +105,33 @@ describe('instructor confirmation conflicts', () => {
   it.each(['accepted', 'completed'] as const)('blocks a student conflict across tutors against a %s session', async (status) => {
     legacy('existing', status);
     const student = await as('s1');
+    // The student can't request a time that overlaps a session they already have, with any tutor.
+    const listing = (await student.get('/api/tutors/t2/booking?hours=1.5')).body.slots as { slot: string; busy: boolean; taken: boolean }[];
+    const at = (slot: string) => listing.find((o) => o.slot === slot)!;
+    expect([at('Mon 08:00').busy, at('Mon 09:00').busy, at('Mon 10:00').busy, at('Mon 11:00').busy]).toEqual([true, true, true, false]);
+    expect(at('Mon 10:00').taken).toBe(false);
     const created = await student.post('/api/sessions').send(payload('t2', 'Mon 10:00', 1.5));
-    expect(created.status).toBe(201);
+    expect(created.status).toBe(409);
+    expect(created.body.error).toMatch(/You already have a session at that time/);
+    // A request that predates the confirmed session still can't be accepted.
+    legacy('older-request', 'pending', 't2', 's1', 'Mon 10:00', 1.5);
     const tutor = await as('t2');
-    const result = await tutor.post(`/api/sessions/${created.body.id}/respond`).send({ accept: true });
+    const result = await tutor.post('/api/sessions/older-request/respond').send({ accept: true });
     expect(result.status).toBe(409);
     expect(result.body.error).toMatch(/Cannot confirm.*this student already has another session/);
+  });
+
+  it('declines the student’s other overlapping requests when one is accepted', async () => {
+    const student = await as('s1');
+    const withT1 = await student.post('/api/sessions').send(payload('t1', 'Mon 09:00', 2));
+    const withT2 = await student.post('/api/sessions').send(payload('t2', 'Mon 10:00'));
+    const later = await student.post('/api/sessions').send(payload('t2', 'Mon 11:00'));
+    expect([withT1.status, withT2.status, later.status]).toEqual([201, 201, 201]);
+    const t1 = await as('t1');
+    expect((await t1.post(`/api/sessions/${withT1.body.id}/respond`).send({ accept: true })).body.autoDeclined).toBe(1);
+    const row = (id: string) => db.select().from(tutoringSessions).where(eq(tutoringSessions.id, id)).get()!;
+    expect(row(withT2.body.id)).toMatchObject({ status: 'declined', declineReason: 'You already have a session at this time.' });
+    expect(row(later.body.id).status).toBe('pending');
   });
 
   it('allows confirming back-to-back sessions and the same time on a different date', async () => {
@@ -186,8 +207,8 @@ describe('instructor confirmation conflicts', () => {
         secondTutor.post(`/api/sessions/${requests[1].body.id}/respond`).send({ accept: true }),
       ]);
       expect(confirmations.map((r) => r.status).sort()).toEqual([200, 409]);
-      // The losing request overlaps the winner, so for the same tutor it is declined automatically.
-      expect(db.select().from(tutoringSessions).all().map((s) => s.status).sort()).toEqual(['accepted', kind === 'tutor' ? 'declined' : 'pending']);
+      // The losing request overlaps the winner (same tutor or same student), so it is declined automatically.
+      expect(db.select().from(tutoringSessions).all().map((s) => s.status).sort()).toEqual(['accepted', 'declined']);
     } finally { await close(otherApp); secondDb.$client.close(); }
   });
 
