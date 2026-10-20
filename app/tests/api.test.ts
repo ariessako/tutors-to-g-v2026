@@ -231,6 +231,32 @@ describe('tutor application', () => {
   });
 });
 
+describe('tutor search', () => {
+  it('searches all approved tutors with filters, keeping the match score', async () => {
+    const bea = await as('bea@student.ph');
+    const all = (await bea.get('/api/tutors')).body;
+    expect(all.tutors.length).toBe(all.total);
+    expect(all.tutors.length).toBeGreaterThan((await bea.get('/api/tutors?scope=cluster')).body.tutors.length);
+    const pcts = all.tutors.map((t: { pct: number }) => t.pct);
+    expect(pcts).toEqual([...pcts].sort((a: number, b: number) => b - a));
+
+    const paolo = (await bea.get('/api/tutors?q=paolo')).body.tutors;
+    expect(paolo.map((t: { name: string }) => t.name)).toEqual(['Paolo Reyes']);
+    expect((await bea.get('/api/tutors?q=pasig')).body.tutors.some((t: { id: string }) => t.id === 't_paolo')).toBe(true);
+
+    const filtered = (await bea.get('/api/tutors?subject=Math&maxRate=400&day=Sat&sort=price')).body.tutors as { subjects: string[]; rate: number; days: string[] }[];
+    for (const t of filtered) {
+      expect(t.subjects).toContain('Math');
+      expect(t.rate).toBeLessThanOrEqual(400);
+      expect(t.days).toContain('Sat');
+    }
+    expect(filtered.map((t) => t.rate)).toEqual(filtered.map((t) => t.rate).sort((a, b) => a - b));
+    const rated = (await bea.get('/api/tutors?minRating=4.5')).body.tutors as { avg: number; count: number }[];
+    for (const t of rated) expect(t.count > 0 && t.avg >= 4.5).toBe(true);
+    expect((await bea.get('/api/tutors?subject=Astrology')).status).toBe(400);
+  });
+});
+
 describe('session log', () => {
   it('records attendance, topics and notes when a tutor completes a session, with a timeline and CSV export', async () => {
     const paolo = await as('paolo.reyes@tutor.ph');

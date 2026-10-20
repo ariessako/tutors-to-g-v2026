@@ -1,14 +1,15 @@
-import { useState } from 'react';
+import { useDeferredValue, useState, type ReactNode } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { Link, useNavigate, useParams } from 'react-router';
 import type { Me } from '../../../shared/types';
 import { avatar, fmtDate, fmtTime, hoursLabel, peso, stars } from '../../../shared/format';
-import { SUBJECTS, WEEK } from '../../../shared/vocab';
+import { GRADES, SUBJECTS, WEEK } from '../../../shared/vocab';
 import { api, useAction, useApi } from '../api';
 import { PAYMENT, SESSION, type LinkView } from '../labels';
 import { BookModal, PayModal, RateModal } from '../modals/StudentModals';
 import { SessionDetailsModal } from '../modals/SessionModals';
 import type { MatchesResponse, SessionView, StudentHome as Home, TutorCard, TutorProfileResponse } from '../types';
-import { Avatar, Bar, CardHead, DateTile, ErrorBox, Icon, Loading, MatchRing, PageHead, Seg, Stat, Tag, useToast } from '../ui';
+import { Avatar, Bar, CardHead, DateTile, ErrorBox, Field, Icon, Loading, MatchRing, PageHead, Seg, Stat, Tag, useToast } from '../ui';
 
 export type StudentModal =
   | { type: 'book'; tutorId: string }
@@ -190,6 +191,45 @@ const SORTS = [
 ] as const;
 type Sort = (typeof SORTS)[number]['value'];
 
+/** A tutor result: match score, rating, rate, shared hobbies and how closely each part of the profile matches. */
+function TutorCardItem({ m, onBook, note }: { m: TutorCard; onBook: () => void; note?: ReactNode }) {
+  return (
+    <article className="card card-hover" style={{ padding: 18, display: 'flex', flexDirection: 'column', gap: 12, cursor: 'default' }}>
+      <div className="row" style={{ gap: 12 }}>
+        <Avatar name={m.name} size={46} />
+        <div style={{ minWidth: 0, flex: 1 }}>
+          <Link to={`/tutors/${m.id}`} style={{ fontFamily: 'var(--font-head)', fontSize: 19, fontWeight: 600, color: 'var(--color-text)', textDecoration: 'none' }}>{m.name}</Link>
+          <div className="muted ellipsis" style={{ fontSize: 12 }}>{m.headline}</div>
+        </div>
+        <MatchRing pct={m.pct} />
+      </div>
+      <div className="muted row wrap" style={{ gap: '6px 14px', fontSize: 13 }}>
+        <span className="row" style={{ gap: 4 }}><Icon name="star" style={{ color: 'var(--cl-6)' }} />{m.count ? `★ ${m.avg.toFixed(1)} (${m.count})` : 'No reviews yet'}</span>
+        <span className="row" style={{ gap: 4 }}><Icon name="money" />{peso(m.rate)}/hr</span>
+        <span className="row" style={{ gap: 4 }}><Icon name="books" />{m.subjects.join(', ')}</span>
+      </div>
+      {note}
+      <Shared items={m.sharedHobbies} />
+      <p className="muted pretty" style={{ fontSize: 13 }}>{m.why}</p>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px 14px' }}>
+        {m.blocks.map((b) => (
+          <div key={b.label} style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11 }}>
+              <span className="muted">{b.label}</span>
+              <span style={{ fontWeight: 600 }}>{Math.round(b.sim * 100)}%</span>
+            </div>
+            <Bar pct={b.sim * 100} variant="thin" />
+          </div>
+        ))}
+      </div>
+      <div className="row" style={{ gap: 8, marginTop: 'auto', paddingTop: 4 }}>
+        <button className="btn btn-primary" style={{ flex: 1, height: 36 }} onClick={onBook}>Request session</button>
+        <Link className="btn btn-secondary" style={{ height: 36, padding: '0 14px' }} to={`/tutors/${m.id}`}>Profile</Link>
+      </div>
+    </article>
+  );
+}
+
 export function Matches() {
   const q = useApi<MatchesResponse>('/matches');
   const [subj, setSubj] = useState('All');
@@ -229,38 +269,7 @@ export function Matches() {
       {!list.length && <div className="empty">No tutors in your cluster teach {cur}. Try another subject or check the tutors outside your cluster below.</div>}
       <div className="card-grid">
         {list.map((m) => (
-          <article key={m.id} className="card card-hover" style={{ padding: 18, display: 'flex', flexDirection: 'column', gap: 12, cursor: 'default' }}>
-            <div className="row" style={{ gap: 12 }}>
-              <Avatar name={m.name} size={46} />
-              <div style={{ minWidth: 0, flex: 1 }}>
-                <Link to={`/tutors/${m.id}`} style={{ fontFamily: 'var(--font-head)', fontSize: 19, fontWeight: 600, color: 'var(--color-text)', textDecoration: 'none' }}>{m.name}</Link>
-                <div className="muted ellipsis" style={{ fontSize: 12 }}>{m.headline}</div>
-              </div>
-              <MatchRing pct={m.pct} />
-            </div>
-            <div className="muted row wrap" style={{ gap: '6px 14px', fontSize: 13 }}>
-              <span className="row" style={{ gap: 4 }}><Icon name="star" style={{ color: 'var(--cl-6)' }} />{m.count ? `★ ${m.avg.toFixed(1)} (${m.count})` : 'No reviews yet'}</span>
-              <span className="row" style={{ gap: 4 }}><Icon name="money" />{peso(m.rate)}/hr</span>
-              <span className="row" style={{ gap: 4 }}><Icon name="books" />{m.subjects.join(', ')}</span>
-            </div>
-            <Shared items={m.sharedHobbies} />
-            <p className="muted pretty" style={{ fontSize: 13 }}>{m.why}</p>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px 14px' }}>
-              {m.blocks.map((b) => (
-                <div key={b.label} style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11 }}>
-                    <span className="muted">{b.label}</span>
-                    <span style={{ fontWeight: 600 }}>{Math.round(b.sim * 100)}%</span>
-                  </div>
-                  <Bar pct={b.sim * 100} variant="thin" />
-                </div>
-              ))}
-            </div>
-            <div className="row" style={{ gap: 8, marginTop: 'auto', paddingTop: 4 }}>
-              <button className="btn btn-primary" style={{ flex: 1, height: 36 }} onClick={() => setModal({ type: 'book', tutorId: m.id })}>Request session</button>
-              <Link className="btn btn-secondary" style={{ height: 36, padding: '0 14px' }} to={`/tutors/${m.id}`}>Profile</Link>
-            </div>
-          </article>
+          <TutorCardItem key={m.id} m={m} onBook={() => setModal({ type: 'book', tutorId: m.id })} />
         ))}
       </div>
       <div className="card card-clip">
@@ -282,6 +291,88 @@ export function Matches() {
           </table>
         </div>
       </div>
+      <StudentModals modal={modal} onClose={() => setModal(null)} />
+    </section>
+  );
+}
+
+interface SearchResponse { tutors: (TutorCard & { inCluster: boolean })[]; total: number; reason?: 'no_tutors' | 'profile_required' }
+
+/** Search all approved tutors by keyword, with filters, ranked by match, rating or price. */
+export function FindTutors() {
+  const [q, setQ] = useState('');
+  const [subject, setSubject] = useState('');
+  const [grade, setGrade] = useState('');
+  const [maxRate, setMaxRate] = useState('');
+  const [minRating, setMinRating] = useState('');
+  const [day, setDay] = useState('');
+  const [scope, setScope] = useState<'all' | 'cluster'>('all');
+  const [sort, setSort] = useState<'match' | 'rating' | 'price'>('match');
+  const [modal, setModal] = useState<StudentModal | null>(null);
+  const query = useDeferredValue(q.trim());
+  const params = new URLSearchParams(Object.entries({ q: query, subject, grade, maxRate, minRating, day, scope, sort }).filter(([, v]) => v)).toString();
+  const res = useQuery({ queryKey: ['/tutors', params], queryFn: () => api<SearchResponse>(`/tutors?${params}`), placeholderData: (prev) => prev });
+  const clear = () => { setQ(''); setSubject(''); setGrade(''); setMaxRate(''); setMinRating(''); setDay(''); };
+  const filtered = !!(query || subject || grade || maxRate || minRating || day);
+  return (
+    <section className="page" style={{ gap: 18 }}>
+      <PageHead title="Find a tutor" sub="Search every approved tutor. Your match score shows how close each one is to your profile." />
+      <div className="card card-pad" style={{ gap: 12 }}>
+        <div className="row" style={{ gap: 10 }}>
+          <Icon name="magnifying-glass" className="muted" style={{ fontSize: 20 }} />
+          <input className="input" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search by name, subject or keyword (e.g. calculus, DepEd, Ateneo)" aria-label="Search tutors" style={{ flex: 1 }} />
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10 }}>
+          <Field label="Subject">
+            <select className="input sm" value={subject} onChange={(e) => setSubject(e.target.value)}><option value="">Any</option>{SUBJECTS.map((s) => <option key={s}>{s}</option>)}</select>
+          </Field>
+          <Field label="Grade level">
+            <select className="input sm" value={grade} onChange={(e) => setGrade(e.target.value)}><option value="">Any</option>{GRADES.map((g) => <option key={g}>{g}</option>)}</select>
+          </Field>
+          <Field label="Max rate per hour">
+            <select className="input sm" value={maxRate} onChange={(e) => setMaxRate(e.target.value)}><option value="">Any</option>{[300, 400, 500, 700, 1000].map((r) => <option key={r} value={r}>Up to {peso(r)}</option>)}</select>
+          </Field>
+          <Field label="Rating">
+            <select className="input sm" value={minRating} onChange={(e) => setMinRating(e.target.value)}><option value="">Any</option>{[4.5, 4, 3.5].map((r) => <option key={r} value={r}>★ {r} and up</option>)}</select>
+          </Field>
+          <Field label="Available on">
+            <select className="input sm" value={day} onChange={(e) => setDay(e.target.value)}><option value="">Any day</option>{WEEK.map((d) => <option key={d}>{d}</option>)}</select>
+          </Field>
+        </div>
+        <div className="row wrap" style={{ justifyContent: 'space-between', gap: 12 }}>
+          <Seg label="Scope" value={scope} onChange={setScope} options={[{ value: 'all', label: 'All tutors' }, { value: 'cluster', label: 'My cluster' }]} />
+          <div className="row" style={{ gap: 8 }}>
+            {filtered && <button className="btn btn-ghost btn-sm" onClick={clear}>Clear filters</button>}
+            <span className="muted" style={{ fontSize: 12 }}>Sort</span>
+            <Seg label="Sort" value={sort} onChange={setSort} options={[{ value: 'match', label: 'Best match' }, { value: 'rating', label: 'Top rated' }, { value: 'price', label: 'Lowest price' }]} />
+          </div>
+        </div>
+      </div>
+      {!res.data ? (
+        res.error ? <ErrorBox error={res.error.message} /> : <Loading />
+      ) : res.data.reason ? (
+        <div className="empty">{res.data.reason === 'profile_required' ? 'Complete your matching profile to search tutors.' : 'No approved tutors yet.'}</div>
+      ) : (
+        <>
+          <div className="muted" style={{ fontSize: 13 }} aria-live="polite">{res.data.tutors.length} of {res.data.total} tutor{res.data.total === 1 ? '' : 's'}{res.isFetching ? ' · updating…' : ''}</div>
+          {!res.data.tutors.length && <div className="empty">No tutors match. Try fewer filters or another keyword.</div>}
+          <div className="card-grid">
+            {res.data.tutors.map((m) => (
+              <TutorCardItem
+                key={m.id}
+                m={m}
+                onBook={() => setModal({ type: 'book', tutorId: m.id })}
+                note={
+                  <div className="row wrap" style={{ gap: 6 }}>
+                    {m.inCluster && <Tag tone="accent" size="sm" icon="circles-three-plus">Your cluster</Tag>}
+                    {m.days.length > 0 && <span className="muted" style={{ fontSize: 12 }}>Open {m.days.join(', ')}</span>}
+                  </div>
+                }
+              />
+            ))}
+          </div>
+        </>
+      )}
       <StudentModals modal={modal} onClose={() => setModal(null)} />
     </section>
   );

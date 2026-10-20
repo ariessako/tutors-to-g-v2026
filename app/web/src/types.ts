@@ -18,6 +18,7 @@ export interface TutorCard {
   d: number;
   cluster: number;
   sharedHobbies: string[];
+  days: string[];
   why: string;
   blocks: { label: string; sim: number }[];
 }

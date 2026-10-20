@@ -7,7 +7,7 @@ import { saveFile, type Ctx } from '../context';
 import { childIdsOf, logEvent, nowIso, uid } from '../services';
 import { reviewViews, sessionViews } from '../views';
 import { iso, slotDate, sortSlots } from '../../shared/format';
-import { SESSION_HOURS, SESSION_MODES } from '../../shared/vocab';
+import { GRADES, SESSION_HOURS, SESSION_MODES, SUBJECTS, WEEK } from '../../shared/vocab';
 import type { ScoredTutor } from '../../shared/matching';
 
 const hoursSchema = z.number().refine((h) => (SESSION_HOURS as readonly number[]).includes(h), 'Choose a duration.');
@@ -59,6 +59,7 @@ export function sessionRoutes(ctx: Ctx) {
         d: m.d,
         cluster: m.cluster,
         sharedHobbies: m.sharedHobbies,
+        days: WEEK.filter((d) => (t.slots ?? []).some((s) => s.startsWith(d))),
         why: m.why,
         blocks: m.blocks.map((b) => ({ label: b.label, sim: b.sim })),
       };
@@ -134,6 +135,43 @@ export function sessionRoutes(ctx: Ctx) {
         others: tutorCards(m.others.slice(0, 5)),
       },
     });
+  });
+
+  /** Search every approved tutor (or just the student's cluster), each with the student's match score. */
+  r.get('/tutors', (req, res) => {
+    const me = requireUser(req, 'student');
+    const f = z
+      .object({
+        q: z.string().trim().toLowerCase().max(80).default(''),
+        subject: z.enum(SUBJECTS).optional(),
+        grade: z.enum(GRADES).optional(),
+        maxRate: z.coerce.number().positive().optional(),
+        minRating: z.coerce.number().min(0).max(5).optional(),
+        day: z.enum(WEEK).optional(),
+        scope: z.enum(['all', 'cluster']).default('all'),
+        sort: z.enum(['match', 'rating', 'price']).default('match'),
+      })
+      .parse(req.query);
+    const m = svc.matches(me.id);
+    if (!m) return void res.json({ tutors: [], total: 0, reason: svc.pool().some((p) => p.role === 'teacher') ? 'profile_required' : 'no_tutors' });
+    const scored = f.scope === 'cluster' ? m.inCluster : [...m.inCluster, ...m.others];
+    const inCluster = new Set(m.inCluster.map((t) => t.id));
+    const text = new Map(
+      (scored.length ? db.select({ id: users.id, bio: users.bio, education: users.education }).from(users).where(inArray(users.id, scored.map((t) => t.id))).all() : [])
+        .map((u) => [u.id, `${u.bio ?? ''} ${u.education ?? ''}`]),
+    );
+    const cards = tutorCards(scored)
+      .map((c) => ({ ...c, inCluster: inCluster.has(c.id) }))
+      .filter((c) =>
+        (!f.q || `${c.name} ${c.headline} ${c.subjects.join(' ')} ${text.get(c.id) ?? ''}`.toLowerCase().includes(f.q)) &&
+        (!f.subject || c.subjects.includes(f.subject)) &&
+        (!f.grade || c.levels.includes(f.grade)) &&
+        (f.maxRate === undefined || c.rate <= f.maxRate) &&
+        (f.minRating === undefined || (c.count > 0 && c.avg >= f.minRating)) &&
+        (!f.day || c.days.includes(f.day)),
+      );
+    const by = { match: (a: typeof cards[number], b: typeof cards[number]) => b.pct - a.pct, rating: (a: typeof cards[number], b: typeof cards[number]) => b.avg - a.avg || b.count - a.count, price: (a: typeof cards[number], b: typeof cards[number]) => a.rate - b.rate };
+    res.json({ tutors: cards.sort(by[f.sort]), total: scored.length });
   });
 
   r.get('/tutors/:id', (req, res) => {

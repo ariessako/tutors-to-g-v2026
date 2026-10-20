@@ -5,7 +5,7 @@ import { useMe } from './api';
 import { homePath, Shell } from './Shell';
 import { Landing } from './screens/Landing';
 import { TermsPage } from './screens/Terms';
-import { Matches, StudentHome, StudentSessions, TutorProfile } from './screens/Student';
+import { FindTutors, Matches, StudentHome, StudentSessions, TutorProfile } from './screens/Student';
 import { Group, Groups, ParentChildren, ParentProgress, Profile } from './screens/Common';
 import { TutorHome, TutorReviews, TutorSchedule, TutorSessions } from './screens/Tutor';
 
@@ -58,6 +58,7 @@ const router = createBrowserRouter([
     children: [
       { path: '/home', element: page(['student'], (me) => <StudentHome me={me} />) },
       { path: '/matches', element: page(['student'], () => <Matches />) },
+      { path: '/find', element: page(['student'], () => <FindTutors />) },
       { path: '/sessions', element: page(['student'], () => <StudentSessions />) },
       { path: '/tutors/:id', element: page(undefined, (me) => <TutorProfile me={me} />) },
       { path: '/profile', element: page(['student', 'teacher'], (me) => <Profile me={me} />) },

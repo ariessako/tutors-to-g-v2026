@@ -14,6 +14,7 @@ export function navFor(me: Me): NavItem[] {
     return [
       { to: '/home', label: 'Home', icon: 'house' },
       { to: '/matches', label: 'Matches', icon: 'sparkle' },
+      { to: '/find', label: 'Find tutors', icon: 'magnifying-glass' },
       { to: '/sessions', label: 'Sessions', icon: 'calendar-check' },
       { to: '/groups', label: 'Groups', icon: 'users-three' },
       LAB,
